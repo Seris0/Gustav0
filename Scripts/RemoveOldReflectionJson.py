@@ -49,7 +49,7 @@ def main():
     parser = argparse.ArgumentParser(description='Remove linhas específicas dos arquivos')
     parser.add_argument('-r', '--recursive', action='store_true', help='Processar recursivamente em subdiretórios')
     args = parser.parse_args()
-    pattern_1 = re.compile(r'\$CharacterIB\s*=\s*\d+\s*[\r\n]+\s*ResourceRefDressDiffuse\s*=\s*reference ps-t0\s*[\r\n]+\s*ResourceRefDressLightMap\s*=\s*reference ps-t2\s*')
+    pattern_1 = re.compile(r'\$CharacterIB = \d+\n(?:ResourceRef\w+ = reference ps-t\d+\n)+')
     pattern_2 = re.compile(r'; Generated shader fix for 3.0\+ GIMI importer characters.*?;endif', re.DOTALL)
 
     directory_path = os.getcwd()
