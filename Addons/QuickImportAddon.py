@@ -49,12 +49,12 @@ except ModuleNotFoundError as err1:
 class QuickImportSettings(bpy.types.PropertyGroup):
     tri_to_quads: BoolProperty(
         name="Tri to Quads",
-        default=True,
+        default=False,
         description="Enable Tri to Quads"
     )
     merge_by_distance: BoolProperty(
         name="Merge by Distance",
-        default=True,
+        default=False,
         description="Enable Merge by Distance"
     )
     apply_textures: BoolProperty(

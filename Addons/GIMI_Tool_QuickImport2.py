@@ -1,6 +1,9 @@
 #Author: Gustav0
 #Special thanks to Silent for providing several scripts and 3dframeanalyse, Murren for providing UV and Color and LeoTools for QuickImport.
 
+
+
+
 import os
 import re
 import bpy
@@ -12,6 +15,7 @@ import struct
 import numpy
 import itertools
 import collections
+import copy
 import textwrap
 import shutil
 import webbrowser
@@ -25,7 +29,7 @@ from bpy.utils import register_class, unregister_class
 
 
 bl_info = {
-    "name": "Gimi Scripts",
+    "name": "Gimi Scripts & Quick Import",
     "author": "Gustav0",
     "version": (1, 0),
     "blender": (3, 6, 2),
@@ -1405,15 +1409,6 @@ class MY_ADDON_PT_main_panel(bpy.types.Panel):
     def draw(self, context):
         layout = self.layout
 
-        # Transfer Properties
-        box = layout.box()
-        box.label(text="Transfer Properties", icon='ARROW_LEFTRIGHT')
-        row = box.row()
-        row.prop_search(context.scene, "base_object", bpy.data, "objects", text="Base Object")
-        row = box.row()
-        row.prop_search(context.scene, "target_object", bpy.data, "objects", text="Target Object")
-        row = box.row()
-        row.operator("my_addon.transfer_properties", text="Transfer Custom Properties", icon='MESH_ICOSPHERE')
         # Fill VG's and Remove Unused Vertex Groups
         box = layout.box()
         box.label(text="Vertex Groups", icon='GROUP_VERTEX')
@@ -1435,31 +1430,18 @@ class MY_ADDON_PT_main_panel(bpy.types.Panel):
         layout.operator("object.merge_vertex_groups", text="Merge Vertex")
         # VG Remap
         box = layout.box()
-        box.label(text="Vertex Group REMAP", icon='ARROW_LEFTRIGHT')
+        box.label(text="Vertex Group REMAP", icon='FILE_REFRESH')
         row = box.row()
         row.prop_search(context.scene, "vgm_source_object", bpy.data, "objects", text="Source")
         row = box.row()
         row.prop_search(context.scene, "vgm_destination_object", bpy.data, "objects", text="Target")
         row = box.row()
         row.operator("object.vertex_group_remap", text="Run Remap")     
-        # Bones
-        box = layout.box()
-        box.label(text="Bones", icon='BONE_DATA')
-        row = box.row()
-        row.prop_search(context.scene, "bone_object", bpy.data, "objects", text="Bone Object")
-        row = box.row()
-        row.operator("my_addon.bone_deletion", text="Bone Deletion", icon='X')
-        # Data Utility
-        box = layout.box()
-        box.label(text="Data Utility", icon='SETTINGS')
-        row = box.row()
-        row.operator("my_addon.color_attribute", text="Color Attribute", icon='COLOR')
-        row = box.row()
-        row.operator("my_addon.uv_map", text="UV Map",icon='UV_FACESEL')
-        
+
 class OBJECT_OT_merge_vertex_groups(bpy.types.Operator):
     bl_idname = "object.merge_vertex_groups"
     bl_label = "Merge Vertex Groups"
+    bl_description = "Merge the VG'S based on the selected mode"
 
     def execute(self, context):
         # Retrieve user choices
@@ -1518,99 +1500,6 @@ class OBJECT_OT_merge_vertex_groups(bpy.types.Operator):
 
         return {'FINISHED'}   
 
-class MY_ADDON_OT_color_attribute(bpy.types.Operator):
-    bl_label = "Color Attribute"
-    bl_idname = "my_addon.color_attribute"
-
-    def execute(self, context):
-        scene = bpy.context.scene
-        bpy.context.scene.cursor.location = (0, 0, 0)
-        selected = bpy.context.selected_objects
-        bpy.context.scene.tool_settings.transform_pivot_point = 'CURSOR' 
-
-        for obj in selected:
-            bpy.ops.object.mode_set(mode='EDIT')
-            bm = bmesh.from_edit_mesh(obj.data)
-            names = [a.name for a in obj.data.attributes]
-            if 'COLOR' not in names:
-                collayer = bm.loops.layers.color.new('COLOR')
-                for v in bm.verts:
-                    for l in v.link_loops:
-                        l[collayer] = [1, 0.502, 0.502, 0.5]
-            bpy.ops.object.mode_set(mode='OBJECT')
-
-        return {'FINISHED'}
-
-class MY_ADDON_OT_uv_map(bpy.types.Operator):
-    bl_label = "Create UV Map"
-    bl_idname = "my_addon.uv_map"
-
-    def execute(self, context):
-        bpy.context.scene.cursor.location = (0, 0, 0)
-        selected = bpy.context.selected_objects
-        bpy.context.scene.tool_settings.transform_pivot_point = 'CURSOR'
-        scene = bpy.context.scene
-
-        for obj in selected:
-            bpy.ops.object.mode_set(mode = 'OBJECT')
-            # check if it has uvmap called texcoord.xy
-            # if not, rename first uvmap to texcoord.xy
-            uvs = obj.data.uv_layers
-            if len(uvs) == 0:
-                uvs.new(name='TEXCOORD.xy')
-            if 'TEXCOORD.xy' not in uvs:
-                uvs[0].name = 'TEXCOORD.xy'
-
-            # check if it has uvmap called texcoord1.xy
-            # if not, duplicate texcoord.xy to texcoord1.xy
-            if 'TEXCOORD1.xy' not in uvs:
-                newuv = uvs.new(name='TEXCOORD1.xy')
-                for loop in obj.data.loops:
-                    newuv.data[loop.index].uv = uvs['TEXCOORD.xy'].data[loop.index].uv
-        return {'FINISHED'}
-
-class MY_ADDON_OT_bone_deletion(bpy.types.Operator):
-    bl_label = "Bone Deletion"
-    bl_idname = "my_addon.bone_deletion"
-
-    def execute(self, context):
-        bone_object = context.scene.bone_object
-
-        if bone_object:
-            selected_bones = [bone for bone in bone_object.data.edit_bones if bone.select]
-            for selected_bone in selected_bones:
-                target = self.find_parent_not_in_collection(selected_bone, selected_bones)
-                self.remove_bone(selected_bone, target)
-
-        return {'FINISHED'}
-
-    def transfer_weights(self, source, target, obj):
-        source_group = obj.vertex_groups.get(source.name)
-        if source_group is None:
-            return
-        source_i = source_group.index
-        target_group = obj.vertex_groups.get(target.name)
-        if target_group is None:
-            target_group = obj.vertex_groups.new(name=target.name)
-
-        for v in obj.data.vertices:
-            for g in v.groups:
-                if g.group == source_i:
-                    target_group.add((v.index,), g.weight, 'ADD')
-        obj.vertex_groups.remove(source_group)
-
-    def remove_bone(self, source, target):
-        for o in bpy.data.objects:
-            self.transfer_weights(source, target, o)
-        edit_bone = bpy.context.object.data.edit_bones.get(source.name)
-        bpy.context.object.data.edit_bones.remove(edit_bone)
-
-    def find_parent_not_in_collection(self, bone, collection):
-        if bone.parent in collection:
-            return self.find_parent_not_in_collection(bone.parent, collection)
-        else:
-            return bone.parent
-
 class MY_ADDON_OT_remove_all_vgs(bpy.types.Operator):
     bl_label = "Remove All VG's"
     bl_idname = "my_addon.remove_all_vgs"
@@ -1623,23 +1512,6 @@ class MY_ADDON_OT_remove_all_vgs(bpy.types.Operator):
             # Removendo todos os VGs
             for group in selected_object.vertex_groups:
                 selected_object.vertex_groups.remove(group)
-
-        return {'FINISHED'}
-
-class MY_ADDON_OT_transfer_properties(bpy.types.Operator):
-    bl_label = "Transfer Custom Properties"
-    bl_idname = "my_addon.transfer_properties"
-    bl_description = "Transfer custom 3DMigoto properties to another object"
-
-
-    def execute(self, context):
-        base_object = context.scene.base_object
-        target_object = context.scene.target_object
-
-        if base_object and target_object:
-            # Transfer object custom properties
-            for k in base_object.keys():
-                target_object[k] = base_object[k]
 
         return {'FINISHED'}
 
@@ -1700,6 +1572,7 @@ class OBJECT_OT_vertex_group_remap(bpy.types.Operator):
     bl_idname = "object.vertex_group_remap"
     bl_label = "Vertex Group Remap"
     bl_options = {'REGISTER', 'UNDO'}
+    bl_description = "Remap the vg's between 2 selected objects"
 
     def execute(self, context):
         # Your original code here
@@ -1859,12 +1732,12 @@ class KDTree(object):
 class QuickImportSettings(bpy.types.PropertyGroup):
     tri_to_quads: BoolProperty(
         name="Tri to Quads",
-        default=True,
+        default=False,
         description="Enable Tri to Quads"
     )
     merge_by_distance: BoolProperty(
         name="Merge by Distance",
-        default=True,
+        default=False,
         description="Enable Merge by Distance"
     )
     apply_textures: BoolProperty(
@@ -1947,8 +1820,8 @@ class QuickImportPanel(Panel):
         row.operator("import_scene.3dmigoto_frame_analysis", text="Setup Character", icon='IMPORT')
 
         # Adiciona um botão para chamar a funcionalidade QuickImport
-        row = layout.row()
-        row.operator("import_scene.quick_import", text="Import Using Quick Import", icon='IMPORT')
+        #row = layout.row()
+        #row.operator("import_scene.quick_import", text="Import Using Quick Import", icon='IMPORT')
 
         #  Adiciona caixas de seleção para Tri to Quads e Merge by Distance
         layout.prop(context.scene.quick_import_settings, "tri_to_quads")
@@ -1959,7 +1832,6 @@ class QuickImport(Import3DMigotoFrameAnalysis):
     bl_idname = "import_scene.3dmigoto_frame_analysis"
     bl_label = "Quick Import for GIMI"
     bl_options = {"UNDO"}
-    bl_description = "Setup Character for GIMI/SRMI"
 
     def execute(self, context):
         super().execute(context)
@@ -1977,7 +1849,6 @@ class QuickImport(Import3DMigotoFrameAnalysis):
         # Import files and assign textures if apply_textures is true
         importedmeshes = TextureHandler.import_files(context, files, folder)
 
-        # Optionally go to edit mode and perform additional actions
         if context.scene.quick_import_settings.tri_to_quads:
             bpy.ops.object.mode_set(mode='EDIT')          
             bpy.ops.mesh.select_all(action='SELECT') 
@@ -1987,9 +1858,14 @@ class QuickImport(Import3DMigotoFrameAnalysis):
         if context.scene.quick_import_settings.merge_by_distance:
             bpy.ops.object.mode_set(mode='EDIT')          
             bpy.ops.mesh.select_all(action='SELECT') 
-            bpy.ops.mesh.remove_doubles(use_sharp_edge_from_normals=True)
+            bpy.ops.mesh.remove_doubles(use_sharp_edge_from_normals=True)   
             bpy.ops.mesh.delete_loose()
-
+            
+        if context.scene.quick_import_settings.apply_textures:
+            bpy.ops.object.mode_set(mode='EDIT')          
+            bpy.ops.mesh.select_all(action='SELECT')
+            bpy.ops.mesh.delete_loose()
+            
         return {"FINISHED"}
         
 def menu_func_import(self, context):
@@ -1997,20 +1873,17 @@ def menu_func_import(self, context):
     
 def register():
     bpy.utils.register_class(MY_ADDON_PT_main_panel)
-    bpy.utils.register_class(MY_ADDON_OT_bone_deletion)
-    bpy.utils.register_class(MY_ADDON_OT_transfer_properties)
     bpy.utils.register_class(MY_ADDON_OT_fill_vgs)
     bpy.utils.register_class(MY_ADDON_OT_remove_unused_vgs)
     bpy.utils.register_class(MY_ADDON_OT_remove_all_vgs)
-    bpy.utils.register_class(MY_ADDON_OT_color_attribute)
-    bpy.utils.register_class(MY_ADDON_OT_uv_map)
-    bpy.types.Scene.base_object = bpy.props.PointerProperty(type=bpy.types.Object)
-    bpy.types.Scene.target_object = bpy.props.PointerProperty(type=bpy.types.Object)
-    bpy.types.Scene.Largest_VG = bpy.props.IntProperty()
-    bpy.types.Scene.bone_object = bpy.props.PointerProperty(type=bpy.types.Object)
+    # Adicionando descrições aos Pointers
+    bpy.types.Scene.base_object = bpy.props.PointerProperty(type=bpy.types.Object, description="Base Object for operations")
+    bpy.types.Scene.target_object = bpy.props.PointerProperty(type=bpy.types.Object, description="Target Object for operations")
+    bpy.types.Scene.Largest_VG = bpy.props.IntProperty(description="Value for Largest Vertex Group")
+    bpy.types.Scene.bone_object = bpy.props.PointerProperty(type=bpy.types.Object, description="Object containing bones")
     bpy.utils.register_class(OBJECT_OT_vertex_group_remap)
-    bpy.types.Scene.vgm_source_object = bpy.props.PointerProperty(type=bpy.types.Object)
-    bpy.types.Scene.vgm_destination_object = bpy.props.PointerProperty(type=bpy.types.Object)
+    bpy.types.Scene.vgm_source_object = bpy.props.PointerProperty(type=bpy.types.Object, description="Source Object for Vertex Group Mapping")
+    bpy.types.Scene.vgm_destination_object = bpy.props.PointerProperty(type=bpy.types.Object, description="Destination Object for Vertex Group Mapping")
     #bpy.types.TOPBAR_MT_file_import.append(menu_func_import)
     register_class(QuickImport)
     register_class(QuickImportPanel)
@@ -2030,17 +1903,12 @@ def register():
 
 def unregister():
     bpy.utils.unregister_class(MY_ADDON_PT_main_panel)
-    bpy.utils.unregister_class(MY_ADDON_OT_bone_deletion)
-    bpy.utils.unregister_class(MY_ADDON_OT_transfer_properties)
     bpy.utils.unregister_class(MY_ADDON_OT_fill_vgs)
     bpy.utils.unregister_class(MY_ADDON_OT_remove_unused_vgs)
     bpy.utils.unregister_class(MY_ADDON_OT_remove_all_vgs)
-    bpy.utils.unregister_class(MY_ADDON_OT_color_attribute)
-    bpy.utils.unregister_class(MY_ADDON_OT_uv_map)
     del bpy.types.Scene.base_object
     del bpy.types.Scene.target_object
     del bpy.types.Scene.Largest_VG
-    del bpy.types.Scene.bone_object
     #bpy.types.TOPBAR_MT_file_import.remove(menu_func_import)
     unregister_class(QuickImport)
     unregister_class(QuickImportPanel)

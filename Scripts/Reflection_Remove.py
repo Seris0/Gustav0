@@ -1,3 +1,18 @@
+#Gustav0
+#Remove Old Reflection from all ini files + Match ORFix
+#1.1
+
+
+
+
+
+
+
+
+
+#Changelog 1.1: New Pattern 1 for more precision
+
+
 import re
 import os
 import shutil
@@ -104,11 +119,14 @@ def main():
     args = parser.parse_args()
 
     pattern_1 = re.compile(r'\$CharacterIB = \d+\n(?:ResourceRef\w+ = reference ps-t\d+\n)+')
-    pattern_2 = re.compile(r'; Generated shader fix for 3.0\+ GIMI importer characters.*?;endif', re.DOTALL)
+    pattern_2 = re.compile(r'; Generated shader fix for 3\.0\+ GIMI importer characters.*?;endif', re.DOTALL)
+    pattern_3 = re.compile(r'; Generated shader fix for 3\.0\+ GIMI importer characters.*?endif', re.DOTALL)
+    pattern_4 = re.compile(r'drawindexed=auto\n\$CharacterIB = 0\nendif\n\n\[CommandListOutline\]\nif \$CharacterIB != 0\n(.*?)\nendif', re.DOTALL)
+
 
     directory_path = os.getcwd()
 
-    process_ini_files(directory_path, [pattern_1, pattern_2], recursive=args.recursive)
+    process_ini_files(directory_path, [pattern_1, pattern_2, pattern_3, pattern_4], recursive=args.recursive)
     process_ini_files_with_orfix(directory_path, recursive=args.recursive)
 
 if __name__ == '__main__':
