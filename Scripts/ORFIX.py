@@ -23,7 +23,6 @@ def find_ini_files(directory, recursive=False):
     return ini_files
 
 def check_orfix(index, current_section, file_lines, file_path):
-    # Check if two lines above ps-t2 contain the word 'NormalMap'
     if index >= 2:
         two_lines_above = file_lines[index - 2]
         ps_t2_line = file_lines[index]
@@ -54,7 +53,6 @@ def process_ini_files(directory, recursive=False):
         for i, line in enumerate(lines):
             line = line.strip()
 
-            # Check if the line is a section
             if line.startswith('[') and line.endswith(']'):
                 current_section = line
             elif current_section and line.startswith('ps-t2'):
@@ -63,7 +61,6 @@ def process_ini_files(directory, recursive=False):
                     modified = True
 
         if modified:
-            # Write the changes back to the .ini file
             with open(ini_file, 'w') as f:
                 f.writelines(lines)
             print("Changes saved in the file.")
