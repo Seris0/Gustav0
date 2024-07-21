@@ -59,7 +59,7 @@ This add-on is intended to be used by advanced users. I will not explain how it 
 
 ## Installation and Usage
 
-1. Copy the `RenameArmature2.py` script to the Blender add-ons directory.
+1. Copy the `RenameArmatureXXMI.py` script to the Blender add-ons directory.
 2. Activate the add-on through the Blender add-ons preferences menu.
 3. Use the "ArmatureXXMI" panel in the "XXMI Scripts" section of Blender's 3D editor to access the add-on's functionalities.
 
