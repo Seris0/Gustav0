@@ -372,6 +372,12 @@ class QuickImportSettings(bpy.types.PropertyGroup):
         default=True,
         description="Apply Materials and Textures"
     ) #type: ignore 
+    create_collection: BoolProperty(
+        name="Create Collection",
+        default=False,
+        description="Create a new collection based on the folder name"
+    ) #type: ignore e: ignore 
+
 
 class TextureHandler:
     @staticmethod
@@ -416,11 +422,11 @@ class TextureHandler:
                 material_name = "mat_" + mesh_name
                 mat = TextureHandler.new_material(material_name, file)
 
-        
+             
                 for obj in bpy.data.objects:
                     print(f"Checking {obj.name} against {mesh_name}")
                     if obj.name.startswith(mesh_name):
-                       
+              
                         print(f"FOUND! Assigning material {mat} to {obj.name}")
                         obj.data.materials.append(bpy.data.materials.get(mat))
                         importedmeshes.append(obj)
@@ -443,11 +449,13 @@ class GIMI_TOOLS_PT_quick_import_panel(bpy.types.Panel):
         row = layout.row()
         row.operator("import_scene.3dmigoto_frame_analysis", text="Setup Character", icon='IMPORT')
 
-
         layout.prop(context.scene.quick_import_settings, "tri_to_quads")
         layout.prop(context.scene.quick_import_settings, "merge_by_distance")
         layout.prop(scene.quick_import_settings, "reset_rotation")
-        layout.prop(context.scene.quick_import_settings, "apply_textures")
+
+        row = layout.row(align=True)
+        row.prop(context.scene.quick_import_settings, "apply_textures")
+        row.prop(context.scene.quick_import_settings, "create_collection")
 
 class QuickImport(Import3DMigotoFrameAnalysis):
     bl_idname = "import_scene.3dmigoto_frame_analysis"
@@ -462,20 +470,34 @@ class QuickImport(Import3DMigotoFrameAnalysis):
         print(f"Found Folder: {folder}")
         files = os.listdir(folder)
         files = [f for f in files if f.endswith("Diffuse.dds")]
-        print(f"List of files:{files}")
+        print(f"List of files: {files}")
 
         importedmeshes = TextureHandler.import_files(context, files, folder)
+        print(f"Imported meshes: {[obj.name for obj in importedmeshes]}")
+
+        if context.scene.quick_import_settings.create_collection:
+            collection_name = os.path.basename(folder)
+            new_collection = bpy.data.collections.new(collection_name)
+            bpy.context.scene.collection.children.link(new_collection)
+
+            # Move all selected objects (imported meshes) to the new collection if their name matches the collection name
+            for obj in bpy.context.selected_objects:
+                if obj.name.startswith(collection_name):
+                    bpy.context.scene.collection.objects.unlink(obj)
+                    new_collection.objects.link(obj)
+                    print(f"Moved {obj.name} to collection {collection_name}")
+                else:
+                    print(f"Ignored {obj.name} as it does not match the collection name")
 
         if context.scene.quick_import_settings.reset_rotation:
             bpy.ops.object.select_all(action='SELECT')
             for obj in context.selected_objects:
                 obj.rotation_euler = (0, 0, 0)
-                
 
         if context.scene.quick_import_settings.tri_to_quads:
             bpy.ops.object.mode_set(mode='EDIT')          
             bpy.ops.mesh.select_all(action='SELECT') 
-            bpy.ops.mesh.tris_convert_to_quads(uvs=True,vcols=True,seam=True,sharp=True,materials=True)
+            bpy.ops.mesh.tris_convert_to_quads(uvs=True, vcols=True, seam=True, sharp=True, materials=True)
             bpy.ops.mesh.delete_loose()
             
         if context.scene.quick_import_settings.merge_by_distance:
@@ -490,10 +512,9 @@ class QuickImport(Import3DMigotoFrameAnalysis):
             bpy.ops.mesh.delete_loose()
             bpy.ops.object.mode_set(mode='OBJECT')
             for area in context.screen.areas:
-                 if area.type == 'VIEW_3D':
+                if area.type == 'VIEW_3D':
                     area.spaces.active.shading.type = 'MATERIAL'
 
-                    
         return {"FINISHED"}
     
 class OBJECT_OT_separate_by_material_and_rename(bpy.types.Operator):
