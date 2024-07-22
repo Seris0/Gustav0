@@ -13,7 +13,7 @@ from mathutils import Vector
 bl_info = {
     "name": "ArmatureXXMI",
     "author": "Gustav",
-    "version": (2, 2),
+    "version": (1, 2),
     "blender": (3, 6, 2),
     "description": "Matches vertex groups based on weight paint centroids and surface area. Also can flip and pull weight from other objects.",
     "category": "Object",
@@ -135,9 +135,9 @@ class ArmatureMatchingOperator(Operator):
 def process_target_collection(collection):
     target_objs = [obj for obj in collection.objects if obj.type == 'MESH']
     
-    for obj in target_objs:
-        if 'weapon' in obj.name.lower() or 'face' in obj.name.lower():
-            bpy.data.objects.remove(obj, do_unlink=True)
+    ao_meshes = [obj for obj in target_objs if obj.name.startswith('AO')]
+    for obj in ao_meshes:
+        bpy.data.objects.remove(obj, do_unlink=True)
     
     bpy.context.view_layer.update()  
     
