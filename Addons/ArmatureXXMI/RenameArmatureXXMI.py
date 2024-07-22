@@ -181,11 +181,12 @@ def process_base_collection(collection, mode, ignore_hair, ignore_head):
             other_meshes.append(joined_body_mesh)
         base_objs = other_meshes
     
-    for obj in base_objs:
-        mesh_name = obj.name.split('-')[0]
-        for vg in obj.vertex_groups:
-            new_name = f"{mesh_name}_{vg.name}"
-            vg.name = new_name
+    if mode != 'GENSHIN':
+        for obj in base_objs:
+            mesh_name = obj.name.split('-')[0]
+            for vg in obj.vertex_groups:
+                new_name = f"{mesh_name}_{vg.name}"
+                vg.name = new_name
     
     bpy.ops.object.select_all(action='DESELECT')
     for obj in base_objs:
@@ -314,20 +315,27 @@ class SetupArmatureForCharacterOperator(Operator):
     def execute(self, context):
         props = context.scene.armature_matching_props
         armature_obj = props.armature
-        
+        mode = props.mode
+
         if not armature_obj or armature_obj.type != 'ARMATURE':
             self.report({'ERROR'}, "A valid armature must be selected.")
             return {'CANCELLED'}
-        
+
         bpy.context.view_layer.objects.active = armature_obj
         bpy.ops.object.mode_set(mode='EDIT')
         
-        for bone in armature_obj.data.edit_bones:
-            if "body" in bone.name.lower():
-         
+        if mode == 'GENSHIN':
+            for bone in armature_obj.data.edit_bones:
+
                 number_part = ''.join(filter(str.isdigit, bone.name))
                 bone.name = number_part
-        
+        else:
+
+            for bone in armature_obj.data.edit_bones:
+                if "body" in bone.name.lower():
+                    number_part = ''.join(filter(str.isdigit, bone.name))
+                    bone.name = number_part
+
         bpy.ops.object.mode_set(mode='OBJECT')
         self.report({'INFO'}, "Setup Armature for Character executed.")
         return {'FINISHED'}
