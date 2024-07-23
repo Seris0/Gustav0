@@ -34,7 +34,10 @@ This add-on is intended to be used by advanced users. I will not explain how it 
 ### 6. Clean Armature Operator
 - **execute**: Cleans the armature by removing bones that are not linked to any vertex groups.
 
-### 7. ArmatureXXMI Panel
+### 7. Split Mesh by Vertex Groups Operator
+- **execute**: Split the mesh based on vertex group prefixes
+
+### 8. ArmatureXXMI Panel
 - Displays the weight paint matching properties and offers buttons to execute the operations described above.
 
 ## Basic Logic
@@ -57,11 +60,15 @@ This add-on is intended to be used by advanced users. I will not explain how it 
 5. **Clean Armature**:
    - Removes bones from the armature that are not linked to any vertex groups.
 
+6. **Split Mesh by Vertex Groups**
+   - Identifies all identical prefixes Vertex Groups and split the mesh based on them, then cleans up the empty vertex groups.
+
 ## Installation and Usage
 
 1. Copy the `RenameArmatureXXMI.py` script to the Blender add-ons directory.
 2. Activate the add-on through the Blender add-ons preferences menu.
 3. Use the "ArmatureXXMI" panel in the "XXMI Scripts" section of Blender's 3D editor to access the add-on's functionalities.
+4. For a demonstration of the add-on in action, watch the video [here](https://streamable.com/7lf7yw).
 
 ## Author
 
