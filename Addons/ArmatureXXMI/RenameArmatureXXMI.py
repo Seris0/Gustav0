@@ -13,9 +13,9 @@ from mathutils import Vector
 bl_info = {
     "name": "ArmatureXXMI",
     "author": "Gustav",
-    "version": (1, 2),
+    "version": (2, 2),
     "blender": (3, 6, 2),
-    "description": "Matches vertex groups based on weight paint centroids and surface area. Also can flip and pull weight from other objects.",
+    "description": "Matches Armature based on weight paint centroids and surface area.",
     "category": "Object",
 }
 
@@ -82,18 +82,20 @@ class ArmatureMatchingOperator(Operator):
         mode = props.mode
         ignore_hair = props.ignore_hair
         ignore_head = props.ignore_head
+        armature_mode = props.armature_mode
 
         print(f"Base Collection: {base_collection}")
         print(f"Target Collection: {target_collection}")
         print(f"Armature Object: {armature_obj}")
         print(f"Mode: {mode}")
+        print(f"Armature Mode: {armature_mode}")
 
         if base_collection and target_collection and armature_obj:
             if armature_obj.type == 'ARMATURE':
                 print("Processing target collection...")
                 target_obj = process_target_collection(target_collection)
                 print("Processing base collection...")
-                base_obj = process_base_collection(base_collection, mode, ignore_hair, ignore_head)
+                base_obj = process_base_collection(base_collection, mode, ignore_hair, ignore_head, armature_mode)
                 
                 if base_obj and target_obj:
                     print("Starting vertex group matching...")
@@ -102,27 +104,30 @@ class ArmatureMatchingOperator(Operator):
                     rename_armature_bones(matching_info, armature_obj)
                     self.report({'INFO'}, "Vertex groups matched and armature bones renamed.")
                     
-          
                     meshes_to_delete = [obj for obj in armature_obj.children if obj.type == 'MESH']
                     bpy.ops.object.select_all(action='DESELECT')
                     for mesh in meshes_to_delete:
                         mesh.select_set(True)
                     bpy.ops.object.delete()
 
-            
                     if armature_obj.name not in base_collection.objects:
                         base_collection.objects.link(armature_obj)
                     
-            
                     for collection in armature_obj.users_collection:
                         if collection != base_collection:
                             collection.objects.unlink(armature_obj)
                     
-               
                     new_armature_name = f"{base_collection.name}_Armature"
                     armature_obj.name = new_armature_name
 
                     self.report({'INFO'}, f"Armature moved to base collection and renamed to {new_armature_name}.")
+
+
+                    for obj in base_collection.objects:
+                        if obj.type == 'MESH':
+                            modifier = obj.modifiers.new(name="Armature", type='ARMATURE')
+                            modifier.object = armature_obj
+                            self.report({'INFO'}, f"Added Armature modifier to {obj.name}.")
                 else:
                     self.report({'ERROR'}, "Failed to process collections.")
             else:
@@ -134,28 +139,33 @@ class ArmatureMatchingOperator(Operator):
 
 def process_target_collection(collection):
     target_objs = [obj for obj in collection.objects if obj.type == 'MESH']
-    
-    ao_meshes = [obj for obj in target_objs if obj.name.startswith('AO')]
-    for obj in ao_meshes:
-        bpy.data.objects.remove(obj, do_unlink=True)
-    
-    bpy.context.view_layer.update()  
-    
-    bpy.ops.object.select_all(action='DESELECT')
-    target_objs = [obj for obj in collection.objects if obj.type == 'MESH']  
+
     for obj in target_objs:
-        if obj.name in bpy.data.objects: 
+        name_lower = obj.name.lower()
+        if name_lower.startswith('ao') or 'hairshadow' in name_lower:
+            bpy.data.objects.remove(obj, do_unlink=True)
+        elif 'weapon' in name_lower and 'body' in name_lower:
+            continue
+        elif 'weapon' in name_lower or 'face' in name_lower:
+            bpy.data.objects.remove(obj, do_unlink=True)
+
+    bpy.context.view_layer.update()  
+
+    bpy.ops.object.select_all(action='DESELECT')
+    target_objs = [obj for obj in collection.objects if obj.type == 'MESH']
+    for obj in target_objs:
+        if obj.name in bpy.data.objects:
             obj.select_set(True)
-    
+
     if len(target_objs) > 0:
         bpy.context.view_layer.objects.active = target_objs[0]
         bpy.ops.object.join()
-        
+
         return bpy.context.view_layer.objects.active
     else:
         return None
 
-def process_base_collection(collection, mode, ignore_hair, ignore_head):
+def process_base_collection(collection, mode, ignore_hair, ignore_head, armature_mode):
     base_objs = [obj for obj in collection.objects if obj.type == 'MESH']
     
     if ignore_hair:
@@ -165,7 +175,7 @@ def process_base_collection(collection, mode, ignore_hair, ignore_head):
         print("Ignoring head meshes...")
         base_objs = [obj for obj in base_objs if 'head' not in obj.name.lower()]
 
-    if mode == 'HONKAI':
+    if mode in ['HONKAI', 'ZENLESS']:
         base_objs = [obj for obj in base_objs if 'face' not in obj.name.lower()]
         
         body_meshes = [obj for obj in base_objs if 'body' in obj.name.lower()]
@@ -180,14 +190,43 @@ def process_base_collection(collection, mode, ignore_hair, ignore_head):
             joined_body_mesh = bpy.context.view_layer.objects.active
             other_meshes.append(joined_body_mesh)
         base_objs = other_meshes
-    
-    if mode != 'GENSHIN':
+
+    if armature_mode == 'PER_COMPONENT':
         for obj in base_objs:
             mesh_name = obj.name.split('-')[0]
             for vg in obj.vertex_groups:
                 new_name = f"{mesh_name}_{vg.name}"
                 vg.name = new_name
-    
+            obj.name = f"{obj.name}"
+            
+    elif armature_mode == 'MERGED':
+        body_shared_meshes = [obj for obj in base_objs if 'body' in obj.name.lower()]
+        other_meshes = [obj for obj in base_objs if 'body' not in obj.name.lower()]
+
+        if body_shared_meshes:
+            bpy.ops.object.select_all(action='DESELECT')
+            for obj in body_shared_meshes:
+                obj.select_set(True)
+            bpy.context.view_layer.objects.active = body_shared_meshes[0]
+            bpy.ops.object.join()
+            joined_body_shared_mesh = bpy.context.view_layer.objects.active
+            other_meshes.append(joined_body_shared_mesh)
+        
+
+        for obj in other_meshes:
+            if 'body' not in obj.name.lower():
+                mesh_name = obj.name.split('-')[0]
+                for vg in obj.vertex_groups:
+                    new_name = f"{mesh_name}_{vg.name}"
+                    vg.name = new_name
+            obj.name = f"{obj.name}"
+        
+        base_objs = [joined_body_shared_mesh] + other_meshes
+
+    elif mode == 'GENSHIN':
+
+        pass
+
     bpy.ops.object.select_all(action='DESELECT')
     for obj in base_objs:
         obj.select_set(True)
@@ -351,13 +390,25 @@ class SetupCharacterForArmatureOperator(Operator):
         base_collection = props.base_collection
         mode = props.mode
         armature_mode = props.armature_mode
+        ignore_hair = props.ignore_hair
+        ignore_head = props.ignore_head
 
         print(f"Base Collection: {base_collection}")
         print(f"Mode: {mode}")
         print(f"Armature Mode: {armature_mode}")
 
+        if bpy.context.object.mode != 'OBJECT':
+            bpy.ops.object.mode_set(mode='OBJECT')
+
         if base_collection:
             base_objs = [obj for obj in base_collection.objects if obj.type == 'MESH']
+
+            if ignore_hair:
+                print("Ignoring hair meshes...")
+                base_objs = [obj for obj in base_objs if 'hair' not in obj.name.lower()]
+            if ignore_head:
+                print("Ignoring head meshes...")
+                base_objs = [obj for obj in base_objs if 'head' not in obj.name.lower()]
 
             if armature_mode == 'MERGED':
                 if mode == 'GENSHIN':
@@ -380,13 +431,27 @@ class SetupCharacterForArmatureOperator(Operator):
                         other_meshes.append(joined_body_mesh)
                     base_objs = other_meshes
 
-            if mode != 'GENSHIN':
+            if armature_mode == 'PER_COMPONENT':
+                for obj in base_objs:
+                    base_obj_name = obj.name.split('-')[0]
+                    for vg in obj.vertex_groups:
+                        if not vg.name.startswith(f"{base_obj_name}_"):
+                            vg.name = f"{base_obj_name}_{vg.name}"
+                            
+            elif mode != 'GENSHIN':
                 for obj in base_objs:
                     base_obj_name = obj.name.split('-')[0]
                     if 'body' not in obj.name.lower():
                         for vg in obj.vertex_groups:
                             if not vg.name.startswith(f"{base_obj_name}_"):
                                 vg.name = f"{base_obj_name}_{vg.name}"
+            
+            bpy.ops.object.select_all(action='DESELECT')
+            for obj in base_objs:
+                obj.select_set(True)
+            if base_objs:
+                bpy.context.view_layer.objects.active = base_objs[0]
+                bpy.ops.object.join()
 
             self.report({'INFO'}, "Character set up for armature.")
         else:
@@ -440,6 +505,111 @@ class CleanArmatureOperator(Operator):
 
         print("Finished CleanArmatureOperator execution.")
         return {'FINISHED'}
+    
+#MARK: SPLIT MESH
+class SplitMeshByVertexGroupsOperator(Operator):
+    """Split the Mesh based on the Vertex Names"""
+    bl_idname = "object.split_mesh_by_vertex_groups"
+    bl_label = "Split Mesh by Vertex Groups"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        props = context.scene.armature_matching_props
+        base_collection = props.base_collection
+        
+        if not base_collection:
+            self.report({'ERROR'}, "Base collection not found.")
+            return {'CANCELLED'}
+        
+        base_objs = [obj for obj in base_collection.objects if obj.type == 'MESH']
+        for obj in base_objs:
+            self.rename_mesh_based_on_vertex_groups(obj, base_collection)
+        
+        self.report({'INFO'}, "Mesh split by vertex groups.")
+        return {'FINISHED'}
+
+    @staticmethod
+    def is_numeric(s):
+        try:
+            float(s)
+            return True
+        except ValueError:
+            return False
+
+    @staticmethod
+    def remove_unused_vertex_groups(obj):
+        obj.update_from_editmode()
+        vgroup_used = {i: False for i, _ in enumerate(obj.vertex_groups)}
+        for v in obj.data.vertices:
+            for g in v.groups:
+                if g.weight > 0.0:
+                    vgroup_used[g.group] = True
+        for i, used in sorted(vgroup_used.items(), reverse=True):
+            if not used:
+                obj.vertex_groups.remove(obj.vertex_groups[i])
+
+    @staticmethod
+    def separate_mesh_by_vertex_group_prefix(obj):
+        vertex_groups_dict = {}
+        for vg in obj.vertex_groups:
+            parts = vg.name.split('_')
+            prefix = parts[0] if not SplitMeshByVertexGroupsOperator.is_numeric(parts[0]) else "numeric_groups"
+            if prefix not in vertex_groups_dict:
+                vertex_groups_dict[prefix] = []
+            vertex_groups_dict[prefix].append(vg.name)
+        bpy.ops.object.mode_set(mode='EDIT')
+        separated_objects = []
+        for prefix, vgs in vertex_groups_dict.items():
+            bpy.ops.mesh.select_all(action='DESELECT')
+            for vg_name in vgs:
+                vg = obj.vertex_groups.get(vg_name)
+                if vg is None:
+                    continue
+                bpy.ops.object.vertex_group_set_active(group=vg.name)
+                bpy.ops.object.vertex_group_select()
+            bpy.ops.mesh.separate(type='SELECTED')
+            new_obj = bpy.context.selected_objects[-1]
+            new_obj.name = f"{obj.name}_{prefix}"
+            separated_objects.append(new_obj)
+        bpy.ops.object.mode_set(mode='OBJECT')
+        return separated_objects
+
+    @staticmethod
+    def combine_numeric_groups():
+        numeric_objects = [obj for obj in bpy.data.objects if obj.type == 'MESH' and "numeric_groups" in obj.name]
+        if numeric_objects:
+            for obj in numeric_objects:
+                obj.select_set(True)
+                bpy.context.view_layer.objects.active = obj
+            bpy.ops.object.join()
+            combined_obj = bpy.context.active_object
+            if combined_obj:
+                combined_obj.name = "Numbers"
+
+    @staticmethod
+    def rename_mesh_based_on_vertex_groups(obj, base_collection):
+        vertex_groups = obj.vertex_groups
+        if not vertex_groups:
+            return
+        group_names = [vg.name for vg in vertex_groups]
+        all_numeric = all(SplitMeshByVertexGroupsOperator.is_numeric(name.split('_')[0]) for name in group_names)
+        if all_numeric:
+            obj.name = f"{base_collection.name}Body"
+        else:
+            prefix = group_names[0].split('_')[0]
+            obj.name = f"{prefix}"
+        selected_obj = bpy.context.active_object
+        if selected_obj and selected_obj.type == 'MESH':
+            separated_objects = SplitMeshByVertexGroupsOperator.separate_mesh_by_vertex_group_prefix(selected_obj)
+            bpy.data.objects.remove(selected_obj, do_unlink=True)
+            for obj in separated_objects:
+                SplitMeshByVertexGroupsOperator.remove_unused_vertex_groups(obj)
+                SplitMeshByVertexGroupsOperator.rename_mesh_based_on_vertex_groups(obj, base_collection)
+            SplitMeshByVertexGroupsOperator.combine_numeric_groups()
+            meshes = [obj for obj in bpy.data.objects if obj.type == 'MESH']
+            for mesh in meshes:
+                mesh.select_set(True)
+            bpy.context.view_layer.objects.active = meshes[0] if meshes else None
 
 #MARK: PANEL   
 class ArmatureXXMIPanel(Panel):
@@ -482,6 +652,7 @@ class ArmatureXXMIPanel(Panel):
         layout.operator("object.clean_armature")
         layout.operator("object.setup_armature_for_character")
         layout.operator("object.setup_character_for_armature")
+        layout.operator("object.split_mesh_by_vertex_groups")
 
 
 classes = [
@@ -491,6 +662,7 @@ classes = [
     SetupCharacterForArmatureOperator,
     CleanArmatureOperator,
     MirrorArmatureOperator,
+    SplitMeshByVertexGroupsOperator,
     ArmatureXXMIPanel,
 ]
 
