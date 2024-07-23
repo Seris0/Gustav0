@@ -191,6 +191,19 @@ def process_base_collection(collection, mode, ignore_hair, ignore_head, armature
             other_meshes.append(joined_body_mesh)
         base_objs = other_meshes
 
+    elif mode == 'GENSHIN':
+        bpy.ops.object.select_all(action='DESELECT')
+        for obj in base_objs:
+            obj.select_set(True)
+        
+        if len(base_objs) > 0:
+            bpy.context.view_layer.objects.active = base_objs[0]
+            bpy.ops.object.join()
+            
+            return bpy.context.view_layer.objects.active
+        else:
+            return None
+
     if armature_mode == 'PER_COMPONENT':
         for obj in base_objs:
             mesh_name = obj.name.split('-')[0]
@@ -222,10 +235,6 @@ def process_base_collection(collection, mode, ignore_hair, ignore_head, armature
             obj.name = f"{obj.name}"
         
         base_objs = [joined_body_shared_mesh] + other_meshes
-
-    elif mode == 'GENSHIN':
-
-        pass
 
     bpy.ops.object.select_all(action='DESELECT')
     for obj in base_objs:
