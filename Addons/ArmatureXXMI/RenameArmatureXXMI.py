@@ -596,6 +596,15 @@ class SplitMeshByVertexGroupsOperator(Operator):
                 combined_obj.name = "Numbers"
 
     @staticmethod
+    def delete_empty_shapekeys(obj):
+        if not obj.data.shape_keys:
+            return
+        key_blocks = obj.data.shape_keys.key_blocks
+        empty_keys = [key for key in key_blocks if all(v.co == key.relative_key.data[i].co for i, v in enumerate(key.data))]
+        for key in empty_keys:
+            obj.shape_key_remove(key)
+
+    @staticmethod
     def rename_mesh_based_on_vertex_groups(obj, base_collection):
         vertex_groups = obj.vertex_groups
         if not vertex_groups:
@@ -614,6 +623,7 @@ class SplitMeshByVertexGroupsOperator(Operator):
             for obj in separated_objects:
                 SplitMeshByVertexGroupsOperator.remove_unused_vertex_groups(obj)
                 SplitMeshByVertexGroupsOperator.rename_mesh_based_on_vertex_groups(obj, base_collection)
+                SplitMeshByVertexGroupsOperator.delete_empty_shapekeys(obj)
             SplitMeshByVertexGroupsOperator.combine_numeric_groups()
             meshes = [obj for obj in bpy.data.objects if obj.type == 'MESH']
             for mesh in meshes:
@@ -633,7 +643,6 @@ class ArmatureXXMIPanel(Panel):
         layout = self.layout
         props = context.scene.armature_matching_props
 
-
         box = layout.box()
         box.label(text="Armature Matching", icon='FILE_REFRESH')
 
@@ -649,19 +658,17 @@ class ArmatureXXMIPanel(Panel):
         box.prop(props, "target_collection")
         box.prop(props, "armature", icon='ARMATURE_DATA')
         
-
         row = box.row(align=True)
         row.scale_y = 1.2
-        row.operator("object.armature_matching")
-        
+        row.operator("object.armature_matching", icon='CON_ARMATURE')
 
         layout.separator(factor=0.5)
 
-        layout.operator("object.mirror_armature")
-        layout.operator("object.clean_armature")
-        layout.operator("object.setup_armature_for_character")
-        layout.operator("object.setup_character_for_armature")
-        layout.operator("object.split_mesh_by_vertex_groups")
+        layout.operator("object.mirror_armature", icon='MOD_MIRROR')
+        layout.operator("object.clean_armature", icon='BRUSH_DATA')
+        layout.operator("object.setup_armature_for_character", icon='OUTLINER_OB_ARMATURE')
+        layout.operator("object.setup_character_for_armature", icon='OUTLINER_OB_MESH')
+        layout.operator("object.split_mesh_by_vertex_groups", icon='GROUP_VERTEX')
 
 
 classes = [
