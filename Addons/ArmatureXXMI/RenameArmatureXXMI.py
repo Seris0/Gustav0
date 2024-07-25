@@ -8,6 +8,7 @@ import bpy
 from bpy.types import Operator, Panel, PropertyGroup
 from bpy.props import PointerProperty, EnumProperty, BoolProperty
 from mathutils import Vector
+import numpy as np
 
 
 bl_info = {
@@ -248,31 +249,8 @@ def process_base_collection(collection, mode, ignore_hair, ignore_head, armature
     else:
         return None
     
-def get_weighted_center(obj, vgroup):
-    total_weight_area = 0.0
-    weighted_position_sum = Vector((0.0, 0.0, 0.0))
-
-    vertex_influence_area = calculate_vertex_influence_area(obj)
-
-    for vertex in obj.data.vertices:
-        weight = get_vertex_group_weight(vgroup, vertex)
-        influence_area = vertex_influence_area[vertex.index]
-        weight_area = weight * influence_area
-
-        if weight_area > 0:
-            weighted_position_sum += obj.matrix_world @ vertex.co * weight_area
-            total_weight_area += weight_area
-
-    if total_weight_area > 0:
-        center = weighted_position_sum / total_weight_area
-        print(f"Center for {vgroup.name}: {center}")
-        return center
-    else:
-        print(f"No weighted center for {vgroup.name}")
-        return None
-
 def calculate_vertex_influence_area(obj):
-    vertex_area = [0.0] * len(obj.data.vertices)
+    vertex_area = np.zeros(len(obj.data.vertices))
     
     for face in obj.data.polygons:
         area_per_vertex = face.area / len(face.vertices)
@@ -281,42 +259,68 @@ def calculate_vertex_influence_area(obj):
 
     return vertex_area
 
-def get_vertex_group_weight(vgroup, vertex):
-    for group in vertex.groups:
-        if group.group == vgroup.index:
-            return group.weight
-    return 0.0
+def get_all_weighted_centers(obj):
+    vertex_influence_area = calculate_vertex_influence_area(obj)
+    matrix_world = np.array(obj.matrix_world)
+
+    def to_homogeneous(coord):
+        return np.array([coord.x, coord.y, coord.z, 1.0])
+
+    vertex_coords = np.array([matrix_world @ to_homogeneous(vertex.co) for vertex in obj.data.vertices])[:, :3]
+    num_vertices = len(obj.data.vertices)
+    num_groups = len(obj.vertex_groups)
+
+    weights = np.zeros((num_vertices, num_groups))
+    for vertex in obj.data.vertices:
+        for group in vertex.groups:
+            weights[vertex.index, group.group] = group.weight
+
+    weighted_areas = weights * vertex_influence_area[:, np.newaxis]
+    total_weight_areas = weighted_areas.sum(axis=0)
+    
+    centers = {}
+    for i, vgroup in enumerate(obj.vertex_groups):
+        total_weight_area = total_weight_areas[i]
+        if total_weight_area > 0:
+            weighted_position_sum = (weighted_areas[:, i][:, np.newaxis] * vertex_coords).sum(axis=0)
+            center = weighted_position_sum / total_weight_area
+            centers[vgroup.name] = center
+            print(f"Center for {vgroup.name}: {center}")
+        else:
+            centers[vgroup.name] = None
+            print(f"No weighted center for {vgroup.name}")
+
+    return centers
+
+def find_nearest_center(base_centers, target_center):
+    best_match = None
+    best_distance = float('inf')
+    for base_group_name, base_center in base_centers.items():
+        if base_center is None:
+            continue
+        distance = np.linalg.norm(target_center - base_center)
+        if distance < best_distance:
+            best_distance = distance
+            best_match = base_group_name
+    return best_match
 
 def match_vertex_groups(base_obj, target_obj):
     matching_info = {}
 
-    base_centers = {}
-    for base_group in base_obj.vertex_groups:
-        base_centers[base_group.name] = get_weighted_center(base_obj, base_group)
+    base_centers = get_all_weighted_centers(base_obj)
+    target_centers = get_all_weighted_centers(target_obj)
 
-    for target_group in target_obj.vertex_groups:
-        target_center = get_weighted_center(target_obj, target_group)
+    for target_group_name, target_center in target_centers.items():
         if target_center is None:
             continue
 
-        best_match = None
-        best_distance = float('inf')
-
-        for base_group_name, base_center in base_centers.items():
-            if base_center is None:
-                continue
-
-            distance = (target_center - base_center).length
-            if distance < best_distance:
-                best_distance = distance
-                best_match = base_group_name
+        best_match = find_nearest_center(base_centers, target_center)
 
         if best_match:
-            print(f"Target group {target_group.name} matched with base group {best_match}")
-            matching_info[target_group.name] = best_match
+            print(f"Target group {target_group_name} matched with base group {best_match}")
+            matching_info[target_group_name] = best_match
 
     return matching_info
-
 def rename_armature_bones(matching_info, armature_obj):
     bpy.ops.object.mode_set(mode='OBJECT')
     armature = armature_obj.data

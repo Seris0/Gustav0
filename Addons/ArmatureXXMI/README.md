@@ -8,6 +8,16 @@ For a better experience, use it together with [XXMI_Tool_QuickImport_42.py](http
 
 This add-on is intended to be used by advanced users. I will not explain how it works, as an advanced user must understand the terms and actions used.
 
+## Changelog
+
+### Beta Release
+- The beta version of the ArmatureXXMI Add-on is now available!
+
+### Massive Speed Improvement
+- Optimized the vertex group matching process.
+- Reduced processing time significantly by leveraging numpy for batch operations.
+- Removed redundant loops and streamlined calculations for better performance.
+
 ## Main Features
 
 ### 1. Armature Matching Properties
@@ -69,6 +79,7 @@ This add-on is intended to be used by advanced users. I will not explain how it 
 2. Activate the add-on through the Blender add-ons preferences menu.
 3. Use the "ArmatureXXMI" panel in the "XXMI Scripts" section of Blender's 3D editor to access the add-on's functionalities.
 4. For a demonstration of the add-on in action, watch the video [here](https://streamable.com/7lf7yw).
+
 
 ## Author
 
