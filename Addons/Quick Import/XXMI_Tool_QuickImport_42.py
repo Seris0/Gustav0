@@ -12,6 +12,7 @@ from bpy.types import Object, Operator, Panel, PropertyGroup
 from bpy_extras.io_utils import unpack_list, ImportHelper, ExportHelper, axis_conversion
 from blender_dds_addon import import_dds
 from bpy.utils import register_class, unregister_class
+import numpy as np
  
 
 try:
@@ -215,141 +216,95 @@ class OBJECT_OT_vertex_group_remap(bpy.types.Operator):
             self.report({'ERROR'}, "Please, Select Target and Source object")
             return {'CANCELLED'}
 
-        original_vg_length = len(source_object.vertex_groups)
-
-        source_vertices = collect_vertices(source_object)
-        tree = KDTree(list(source_vertices.keys()), 3)
-
-        candidates = [{} for _ in range(len(destination_object.vertex_groups))]
-        destination_vertices = collect_vertices(destination_object)
-        for vertex in destination_vertices:
-            nearest_source = source_vertices[tree.get_nearest(vertex)[1]]
-            for group, weight in destination_vertices[vertex]:
-                if weight == 0:
-                    continue
-                nearest_source_group, smallest_distance = nearest_group(weight, nearest_source)
-
-                if nearest_source_group in candidates[group]:
-                    x = candidates[group][nearest_source_group]
-                    candidates[group][nearest_source_group] = [x[0] + smallest_distance, x[1] + 1]
-                else:
-                    candidates[group][nearest_source_group] = [smallest_distance, 1]
-
-        best = []
-        for group in candidates:
-            best_group = -1
-            highest_overlap = -1
-            for c in group:
-                if group[c][1] > highest_overlap:
-                    best_group = c
-                    highest_overlap = group[c][1]
-            best.append(best_group)
-
-        for i, vg in enumerate(destination_object.vertex_groups):
-            if best[i] == -1:
-                print(f"Removing empty group {vg.name}")
-                destination_object.vertex_groups.remove(vg)
-            else:
-                print(f"Renaming {vg.name} to {best[i]}")
-                vg.name = f"x{str(best[i])}"
-
-        for i, vg in enumerate(destination_object.vertex_groups):
-            vg.name = vg.name[1:]
-
-        missing = set([f"{i}" for i in range(original_vg_length)]) - set([x.name.split(".")[0] for x in destination_object.vertex_groups])
-        for number in missing:
-            destination_object.vertex_groups.new(name=f"{number}")
-
+        match_vertex_groups(source_object, destination_object)
+        self.report({'INFO'}, "Vertex groups matched.")
+        bpy.ops.object.mode_set(mode='OBJECT')
         bpy.context.view_layer.objects.active = destination_object
-        bpy.ops.object.vertex_group_sort()
+        destination_object.select_set(True)
 
         return {'FINISHED'}
 
-def collect_vertices(obj):
-    results = {}
-    for v in obj.data.vertices:
-        results[(v.co.x, v.co.y, v.co.z)] = [(vg.group, vg.weight) for vg in v.groups]
-    return results
+def calculate_vertex_influence_area(obj):
+    vertex_area = np.zeros(len(obj.data.vertices))
 
-def nearest_group(weight, nearest_source):
-    nearest_group = -1
-    smallest_difference = 10000000000
-    for source_group, source_weight in nearest_source:
-        if abs(weight - source_weight) < smallest_difference:
-            smallest_difference = abs(weight - source_weight)
-            nearest_group = source_group
-    return nearest_group, smallest_difference
+    for face in obj.data.polygons:
+        area_per_vertex = face.area / len(face.vertices)
+        for vert_idx in face.vertices:
+            vertex_area[vert_idx] += area_per_vertex
 
-class KDTree(object):
-    def __init__(self, points, dim, dist_sq_func=None):
-        if dist_sq_func is None:
-            dist_sq_func = lambda a, b: sum((x - b[i]) ** 2
-                                            for i, x in enumerate(a))
+    return vertex_area
 
-        def make(points, i=0):
-            if len(points) > 1:
-                points.sort(key=lambda x: x[i])
-                i = (i + 1) % dim
-                m = len(points) >> 1
-                return [make(points[:m], i), make(points[m + 1:], i),
-                        points[m]]
-            if len(points) == 1:
-                return [None, None, points[0]]
+def get_all_weighted_centers(obj):
+    vertex_influence_area = calculate_vertex_influence_area(obj)
+    matrix_world = np.array(obj.matrix_world)
 
-        def add_point(node, point, i=0):
-            if node is not None:
-                dx = node[2][i] - point[i]
-                for j, c in ((0, dx >= 0), (1, dx < 0)):
-                    if c and node[j] is None:
-                        node[j] = [None, None, point]
-                    elif c:
-                        add_point(node[j], point, (i + 1) % dim)
+    def to_homogeneous(coord):
+        return (coord.x, coord.y, coord.z, 1.0)
 
-        import heapq
-        def get_knn(node, point, k, return_dist_sq, heap, i=0, tiebreaker=1):
-            if node is not None:
-                dist_sq = dist_sq_func(point, node[2])
-                dx = node[2][i] - point[i]
-                if len(heap) < k:
-                    heapq.heappush(heap, (-dist_sq, tiebreaker, node[2]))
-                elif dist_sq < -heap[0][0]:
-                    heapq.heappushpop(heap, (-dist_sq, tiebreaker, node[2]))
-                i = (i + 1) % dim
-            
-                for b in (dx < 0, dx >= 0)[:1 + (dx * dx < -heap[0][0])]:
-                    get_knn(node[b], point, k, return_dist_sq,
-                            heap, i, (tiebreaker << 1) | b)
-            if tiebreaker == 1:
-                return [(-h[0], h[2]) if return_dist_sq else h[2]
-                        for h in sorted(heap)][::-1]
+    vertex_coords = np.array([matrix_world @ to_homogeneous(vertex.co) for vertex in obj.data.vertices])[:, :3]
+    num_vertices = len(obj.data.vertices)
+    num_groups = len(obj.vertex_groups)
 
-        def walk(node):
-            if node is not None:
-                for j in 0, 1:
-                    for x in walk(node[j]):
-                        yield x
-                yield node[2]
+    weights = np.zeros((num_vertices, num_groups))
+    for vertex in obj.data.vertices:
+        for group in vertex.groups:
+            weights[vertex.index, group.group] = group.weight
 
-        self._add_point = add_point
-        self._get_knn = get_knn
-        self._root = make(points)
-        self._walk = walk
+    weighted_areas = weights * vertex_influence_area[:, np.newaxis]
+    total_weight_areas = weighted_areas.sum(axis=0)
 
-    def __iter__(self):
-        return self._walk(self._root)
-
-    def add_point(self, point):
-        if self._root is None:
-            self._root = [None, None, point]
+    centers = {}
+    for i, vgroup in enumerate(obj.vertex_groups):
+        total_weight_area = total_weight_areas[i]
+        if total_weight_area > 0:
+            weighted_position_sum = (weighted_areas[:, i][:, np.newaxis] * vertex_coords).sum(axis=0)
+            center = weighted_position_sum / total_weight_area
+            centers[vgroup.name] = tuple(center)
+            print(f"Center for {vgroup.name}: {center}")
         else:
-            self._add_point(self._root, point)
+            centers[vgroup.name] = None
+            print(f"No weighted center for {vgroup.name}")
 
-    def get_knn(self, point, k, return_dist_sq=True):
-        return self._get_knn(self._root, point, k, return_dist_sq, [])
+    return centers
 
-    def get_nearest(self, point, return_dist_sq=True):
-        l = self._get_knn(self._root, point, 1, return_dist_sq, [])
-        return l[0] if len(l) else None
+def find_nearest_center(base_centers, target_center):
+    best_match = None
+    best_distance = float('inf')
+    target_center = np.array(target_center)
+    for base_group_name, base_center in base_centers.items():
+        if base_center is None:
+            continue
+        base_center = np.array(base_center)
+        distance = np.linalg.norm(target_center - base_center)
+        if distance < best_distance:
+            best_distance = distance
+            best_match = base_group_name
+    return best_match
+
+def match_vertex_groups(base_obj, target_obj):
+    base_centers = get_all_weighted_centers(base_obj)
+    target_centers = get_all_weighted_centers(target_obj)
+
+    for base_group in base_obj.vertex_groups:
+        base_center = base_centers.get(base_group.name)
+        if base_center is None:
+            continue
+
+        best_match = None
+        best_distance = float('inf')
+
+        for target_group_name, target_center in target_centers.items():
+            if target_center is None:
+                continue
+
+            distance = np.linalg.norm(np.array(base_center) - np.array(target_center))
+            if distance < best_distance:
+                best_distance = distance
+                best_match = target_group_name
+
+        if best_match:
+            base_group.name = best_match
+            print(f"Base group {base_group.index} renamed to {best_match}")
 
 class QuickImportSettings(bpy.types.PropertyGroup):
     tri_to_quads: BoolProperty(
@@ -480,7 +435,7 @@ class QuickImport(Import3DMigotoFrameAnalysis):
             new_collection = bpy.data.collections.new(collection_name)
             bpy.context.scene.collection.children.link(new_collection)
 
-            # Move all selected objects (imported meshes) to the new collection if their name matches the collection name
+
             for obj in bpy.context.selected_objects:
                 if obj.name.startswith(collection_name):
                     bpy.context.scene.collection.objects.unlink(obj)
@@ -529,12 +484,13 @@ class OBJECT_OT_separate_by_material_and_rename(bpy.types.Operator):
         bpy.ops.mesh.separate(type='MATERIAL')
         bpy.ops.object.mode_set(mode='OBJECT')
 
+
         for o in bpy.context.selected_objects:
             material_name = o.active_material.name.replace("mat_", "")
+            material_name = material_name.replace("Diffuse", "").strip()
             o.name = material_name
 
         return {'FINISHED'}
-    
     
     def invoke(self, context, event):
         if event.type == 'P':
@@ -545,7 +501,6 @@ class OBJECT_OT_separate_by_material_and_rename(bpy.types.Operator):
     def draw(self, context):
         layout = self.layout
         layout.label(text="Want to proceed?")
-
 
 def menu_func(self, context):
     self.layout.operator(OBJECT_OT_separate_by_material_and_rename.bl_idname)
@@ -558,7 +513,7 @@ def menu_func_import(self, context):
 
 
 def register():
-
+    cfg = bpy.types.Scene
     classes = [
         GIMI_TOOLS_PT_main_panel,
         GIMI_TOOLS_OT_fill_vgs,
@@ -576,23 +531,23 @@ def register():
         bpy.utils.register_class(cls)
 
     #pointers
-    bpy.types.Scene.base_object = bpy.props.PointerProperty(type=bpy.types.Object, description="Base Object for operations")
-    bpy.types.Scene.target_object = bpy.props.PointerProperty(type=bpy.types.Object, description="Target Object for operations")
-    bpy.types.Scene.Largest_VG = bpy.props.IntProperty(description="Value for Largest Vertex Group")
-    bpy.types.Scene.bone_object = bpy.props.PointerProperty(type=bpy.types.Object, description="Object containing bones")
-    bpy.types.Scene.vgm_source_object = bpy.props.PointerProperty(type=bpy.types.Object, description="Source Object for Vertex Group Mapping")
-    bpy.types.Scene.vgm_destination_object = bpy.props.PointerProperty(type=bpy.types.Object, description="Destination Object for Vertex Group Mapping")
+    cfg.base_object = bpy.props.PointerProperty(type=bpy.types.Object, description="Base Object for operations")
+    cfg.target_object = bpy.props.PointerProperty(type=bpy.types.Object, description="Target Object for operations")
+    cfg.Largest_VG = bpy.props.IntProperty(description="Value for Largest Vertex Group")
+    cfg.bone_object = bpy.props.PointerProperty(type=bpy.types.Object, description="Object containing bones")
+    cfg.vgm_source_object = bpy.props.PointerProperty(type=bpy.types.Object, description="Source Object for Vertex Group Mapping")
+    cfg.vgm_destination_object = bpy.props.PointerProperty(type=bpy.types.Object, description="Destination Object for Vertex Group Mapping")
     bpy.types.TOPBAR_MT_file_import.append(menu_func_import)
     
-    bpy.types.Scene.merge_mode = bpy.props.EnumProperty(items=[
+    cfg.merge_mode = bpy.props.EnumProperty(items=[
         ('MODE1', 'Mode 1: Single VG', 'Merge based on specific vertex groups'),
         ('MODE2', 'Mode 2: By Range ', 'Merge based on a range of vertex groups'),
         ('MODE3', 'Mode 3: All VG', 'Merge all vertex groups')],
         default='MODE3')
-    bpy.types.Scene.vertex_groups = bpy.props.StringProperty(name="Vertex Groups", default="")
-    bpy.types.Scene.smallest_group_number = bpy.props.IntProperty(name="Smallest Group", default=0)
-    bpy.types.Scene.largest_group_number = bpy.props.IntProperty(name="Largest Group", default=999)
-    bpy.types.Scene.quick_import_settings = bpy.props.PointerProperty(type=QuickImportSettings)
+    cfg.vertex_groups = bpy.props.StringProperty(name="Vertex Groups", default="")
+    cfg.smallest_group_number = bpy.props.IntProperty(name="Smallest Group", default=0)
+    cfg.largest_group_number = bpy.props.IntProperty(name="Largest Group", default=999)
+    cfg.quick_import_settings = bpy.props.PointerProperty(type=QuickImportSettings)
     
     bpy.types.VIEW3D_MT_object.append(menu_func)
     wm = bpy.context.window_manager
@@ -601,6 +556,7 @@ def register():
     addon_keymaps.append((km, kmi))
 
 def unregister():
+    cfg = bpy.types.Scene
     classes = [
         GIMI_TOOLS_PT_main_panel,
         GIMI_TOOLS_OT_fill_vgs,
@@ -617,19 +573,19 @@ def unregister():
     for cls in classes:
         bpy.utils.unregister_class(cls)
 
-    del bpy.types.Scene.base_object
-    del bpy.types.Scene.target_object
-    del bpy.types.Scene.Largest_VG
-    del bpy.types.Scene.bone_object
-    del bpy.types.Scene.vgm_source_object
-    del bpy.types.Scene.vgm_destination_object
+    del cfg.base_object
+    del cfg.target_object
+    del cfg.Largest_VG
+    del cfg.bone_object
+    del cfg.vgm_source_object
+    del cfg.vgm_destination_object
     bpy.types.TOPBAR_MT_file_import.remove(menu_func_import)
     
-    del bpy.types.Scene.merge_mode
-    del bpy.types.Scene.vertex_groups
-    del bpy.types.Scene.smallest_group_number
-    del bpy.types.Scene.largest_group_number
-    del bpy.types.Scene.quick_import_settings
+    del cfg.merge_mode
+    del cfg.vertex_groups
+    del cfg.smallest_group_number
+    del cfg.largest_group_number
+    del cfg.quick_import_settings
     
     bpy.types.VIEW3D_MT_object.remove(menu_func)
     for km, kmi in addon_keymaps:
