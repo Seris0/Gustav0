@@ -120,6 +120,7 @@ class ArmatureMatchingOperator(Operator):
                     
                     new_armature_name = f"{base_collection.name}_Armature"
                     armature_obj.name = new_armature_name
+                    armature_obj.show_in_front = True
 
                     self.report({'INFO'}, f"Armature moved to base collection and renamed to {new_armature_name}.")
 
@@ -143,7 +144,7 @@ def process_target_collection(collection, mode):
     target_objs = [obj for obj in collection.objects if obj.type == 'MESH']
 
     if mode == 'GENSHIN':
-        ao_meshes = [obj for obj in target_objs if obj.name.startswith('ao')]
+        ao_meshes = [obj for obj in target_objs if obj.name.startswith('AO')]
         for obj in ao_meshes:
             bpy.data.objects.remove(obj, do_unlink=True)
 
