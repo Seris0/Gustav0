@@ -94,7 +94,7 @@ class ArmatureMatchingOperator(Operator):
         if base_collection and target_collection and armature_obj:
             if armature_obj.type == 'ARMATURE':
                 print("Processing target collection...")
-                target_obj = process_target_collection(target_collection)
+                target_obj = process_target_collection(target_collection, mode)
                 print("Processing base collection...")
                 base_obj = process_base_collection(base_collection, mode, ignore_hair, ignore_head, armature_mode)
                 
@@ -138,19 +138,25 @@ class ArmatureMatchingOperator(Operator):
 
         return {'FINISHED'}
 
-def process_target_collection(collection):
+
+def process_target_collection(collection, mode):
     target_objs = [obj for obj in collection.objects if obj.type == 'MESH']
+
+    if mode == 'GENSHIN':
+        ao_meshes = [obj for obj in target_objs if obj.name.startswith('ao')]
+        for obj in ao_meshes:
+            bpy.data.objects.remove(obj, do_unlink=True)
 
     for obj in target_objs:
         name_lower = obj.name.lower()
-        if name_lower.startswith('ao') or 'hairshadow' in name_lower:
+        if 'hairshadow' in name_lower:
             bpy.data.objects.remove(obj, do_unlink=True)
         elif 'weapon' in name_lower and 'body' in name_lower:
             continue
         elif 'weapon' in name_lower or 'face' in name_lower:
             bpy.data.objects.remove(obj, do_unlink=True)
 
-    bpy.context.view_layer.update()  
+    bpy.context.view_layer.update()
 
     bpy.ops.object.select_all(action='DESELECT')
     target_objs = [obj for obj in collection.objects if obj.type == 'MESH']
