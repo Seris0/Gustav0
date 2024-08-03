@@ -37,7 +37,8 @@ class ArmatureMatchingProperties(PropertyGroup):
         items=[
             ('HONKAI', "Honkai Star Rail", "Process for Honkai Star Rail"),
             ('ZENLESS', "Zenless Zone Zero", "Process for Zenless Zone Zero"),
-            ('GENSHIN', "Genshin Impact", "Process for Genshin Impact")
+            ('GENSHIN', "Genshin Impact", "Process for Genshin Impact"),
+            ("WUWA", "Wuthering Waves", "Process for Wuthering Waves")
         ],
         default='HONKAI'
     )#type: ignore
@@ -199,7 +200,7 @@ def process_base_collection(collection, mode, ignore_hair, ignore_head, armature
             other_meshes.append(joined_body_mesh)
         base_objs = other_meshes
 
-    elif mode == 'GENSHIN':
+    elif mode in ['GENSHIN', 'WUWA']:
         bpy.ops.object.select_all(action='DESELECT')
         for obj in base_objs:
             obj.select_set(True)
@@ -412,12 +413,13 @@ class SetupCharacterForArmatureOperator(Operator):
         armature_mode = props.armature_mode
         ignore_hair = props.ignore_hair
         ignore_head = props.ignore_head
+        armature_obj = props.armature
 
         print(f"Base Collection: {base_collection}")
         print(f"Mode: {mode}")
         print(f"Armature Mode: {armature_mode}")
 
-        if bpy.context.object.mode != 'OBJECT':
+        if bpy.context.object and bpy.context.object.mode != 'OBJECT':
             bpy.ops.object.mode_set(mode='OBJECT')
 
         if base_collection:
@@ -430,13 +432,37 @@ class SetupCharacterForArmatureOperator(Operator):
                 print("Ignoring head meshes...")
                 base_objs = [obj for obj in base_objs if 'head' not in obj.name.lower()]
 
+            try:
+                if armature_obj:
+                    for obj in base_objs:
+                        if obj and obj.name in bpy.data.objects:
+                            if not any(mod.type == 'ARMATURE' for mod in obj.modifiers):
+                                modifier = obj.modifiers.new(name="Armature", type='ARMATURE')
+                                modifier.object = armature_obj
+                                bpy.context.view_layer.objects.active = obj
+                                bpy.ops.object.parent_set(type='ARMATURE')
+            except Exception as e:
+                print(f"Failed to add armature to meshes: {e}")
+
+            join_performed = False
+
             if armature_mode == 'MERGED':
                 if mode == 'GENSHIN':
                     bpy.ops.object.select_all(action='DESELECT')
                     for obj in base_objs:
-                        obj.select_set(True)
-                    bpy.context.view_layer.objects.active = base_objs[0]
-                    bpy.ops.object.join()
+                        if obj and obj.name in bpy.data.objects:
+                            obj.select_set(True)
+                    if base_objs:
+                        try:
+                            bpy.context.view_layer.objects.active = base_objs[0]
+                            bpy.ops.object.join()
+                            join_performed = True
+                        except ReferenceError as e:
+                            print(f"Error joining objects: {e}")
+                        except Exception as e:
+                            print(f"Unexpected error joining objects: {e}")
+                elif mode == 'WUWA':
+                    pass
                 else:
                     body_meshes = [obj for obj in base_objs if 'body' in obj.name.lower()]
                     other_meshes = [obj for obj in base_objs if 'body' not in obj.name.lower()]
@@ -444,34 +470,51 @@ class SetupCharacterForArmatureOperator(Operator):
                     if body_meshes and mode in {'HONKAI', 'ZENLESS'}:
                         bpy.ops.object.select_all(action='DESELECT')
                         for obj in body_meshes:
-                            obj.select_set(True)
-                        bpy.context.view_layer.objects.active = body_meshes[0]
-                        bpy.ops.object.join()
-                        joined_body_mesh = bpy.context.view_layer.objects.active
-                        other_meshes.append(joined_body_mesh)
+                            if obj and obj.name in bpy.data.objects:
+                                obj.select_set(True)
+                        if body_meshes:
+                            try:
+                                bpy.context.view_layer.objects.active = body_meshes[0]
+                                bpy.ops.object.join()
+                                joined_body_mesh = bpy.context.view_layer.objects.active
+                                other_meshes.append(joined_body_mesh)
+                                join_performed = True
+                            except ReferenceError as e:
+                                print(f"Error joining body meshes: {e}")
+                            except Exception as e:
+                                print(f"Unexpected error joining body meshes: {e}")
                     base_objs = other_meshes
 
             if armature_mode == 'PER_COMPONENT':
                 for obj in base_objs:
-                    base_obj_name = obj.name.split('-')[0]
-                    for vg in obj.vertex_groups:
-                        if not vg.name.startswith(f"{base_obj_name}_"):
-                            vg.name = f"{base_obj_name}_{vg.name}"
-                            
-            elif mode != 'GENSHIN':
-                for obj in base_objs:
-                    base_obj_name = obj.name.split('-')[0]
-                    if 'body' not in obj.name.lower():
+                    if obj and obj.name in bpy.data.objects:
+                        base_obj_name = obj.name.split('-')[0]
                         for vg in obj.vertex_groups:
                             if not vg.name.startswith(f"{base_obj_name}_"):
                                 vg.name = f"{base_obj_name}_{vg.name}"
-            
-            bpy.ops.object.select_all(action='DESELECT')
-            for obj in base_objs:
-                obj.select_set(True)
-            if base_objs:
-                bpy.context.view_layer.objects.active = base_objs[0]
-                bpy.ops.object.join()
+
+            elif mode != 'GENSHIN' and mode != 'WUWA':
+                for obj in base_objs:
+                    if obj and obj.name in bpy.data.objects:
+                        base_obj_name = obj.name.split('-')[0]
+                        if 'body' not in obj.name.lower():
+                            for vg in obj.vertex_groups:
+                                if not vg.name.startswith(f"{base_obj_name}_"):
+                                    vg.name = f"{base_obj_name}_{vg.name}"
+
+            if not join_performed and mode != 'WUWA':
+                bpy.ops.object.select_all(action='DESELECT')
+                for obj in base_objs:
+                    if obj and obj.name in bpy.data.objects:
+                        obj.select_set(True)
+                if base_objs:
+                    try:
+                        bpy.context.view_layer.objects.active = base_objs[0]
+                        bpy.ops.object.join()
+                    except ReferenceError as e:
+                        print(f"Error joining objects: {e}")
+                    except Exception as e:
+                        print(f"Unexpected error joining objects: {e}")
 
             self.report({'INFO'}, "Character set up for armature.")
         else:
