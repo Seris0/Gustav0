@@ -146,20 +146,26 @@ def process_target_collection(collection, mode):
     if mode == 'GENSHIN':
         ao_meshes = [obj for obj in target_objs if obj.name.startswith('AO')]
         for obj in ao_meshes:
-            bpy.data.objects.remove(obj, do_unlink=True)
+            collection.objects.unlink(obj)  
+            bpy.data.objects.remove(obj, do_unlink=True)  
+
+    target_objs = [obj for obj in collection.objects if obj.type == 'MESH']
 
     for obj in target_objs:
         name_lower = obj.name.lower()
         if 'hairshadow' in name_lower:
+            collection.objects.unlink(obj)
             bpy.data.objects.remove(obj, do_unlink=True)
         elif 'weapon' in name_lower and 'body' in name_lower:
             continue
         elif 'weapon' in name_lower or 'face' in name_lower:
+            collection.objects.unlink(obj)
             bpy.data.objects.remove(obj, do_unlink=True)
 
     bpy.context.view_layer.update()
 
     bpy.ops.object.select_all(action='DESELECT')
+
     target_objs = [obj for obj in collection.objects if obj.type == 'MESH']
     for obj in target_objs:
         if obj.name in bpy.data.objects:
@@ -218,9 +224,9 @@ def process_base_collection(collection, mode, ignore_hair, ignore_head, armature
             bpy.context.view_layer.objects.active = body_shared_meshes[0]
             bpy.ops.object.join()
             joined_body_shared_mesh = bpy.context.view_layer.objects.active
-            other_meshes.append(joined_body_shared_mesh)
-        
-        base_objs = [joined_body_shared_mesh] + other_meshes
+            base_objs = [joined_body_shared_mesh] + other_meshes
+        else:
+            base_objs = other_meshes
 
     bpy.ops.object.select_all(action='DESELECT')
     for obj in base_objs:
@@ -536,9 +542,12 @@ class CleanArmatureOperator(bpy.types.Operator):
 
             print(f"Vertex groups: {vertex_group_names}")
 
-            prefixes_to_exclude = ("Shoulder", "Scapula", "Knee", "Elbow")
-            bones_to_delete = [bone for bone in armature.edit_bones if bone.name not in vertex_group_names and not any(bone.name.startswith(prefix) for prefix in prefixes_to_exclude)]
-            print(f"Bones to delete: {bones_to_delete}")
+            prefixes_to_exclude = ("Shoulder", "Scapula", "Knee", "Elbow", "UpperArm", "Clavicle")
+            bones_to_delete = [
+                bone for bone in armature.edit_bones
+                if bone.name not in vertex_group_names and not any(prefix in bone.name for prefix in prefixes_to_exclude)
+            ]
+            print(f"Bones to delete: {[bone.name for bone in bones_to_delete]}")
 
             for bone in bones_to_delete:
                 print(f"Deleting bone: {bone.name}")
