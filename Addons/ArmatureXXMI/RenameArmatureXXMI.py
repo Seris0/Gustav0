@@ -9,7 +9,7 @@ from bpy.types import Operator, Panel, PropertyGroup
 from bpy.props import PointerProperty, EnumProperty, BoolProperty
 from mathutils import Vector
 import numpy as np
-
+import time
 
 bl_info = {
     "name": "ArmatureXXMI",
@@ -140,7 +140,6 @@ class ArmatureMatchingOperator(Operator):
 
         return {'FINISHED'}
 
-
 def process_target_collection(collection, mode):
     target_objs = [obj for obj in collection.objects if obj.type == 'MESH']
 
@@ -200,19 +199,6 @@ def process_base_collection(collection, mode, ignore_hair, ignore_head, armature
             other_meshes.append(joined_body_mesh)
         base_objs = other_meshes
 
-    elif mode in ['GENSHIN', 'WUWA']:
-        bpy.ops.object.select_all(action='DESELECT')
-        for obj in base_objs:
-            obj.select_set(True)
-        
-        if len(base_objs) > 0:
-            bpy.context.view_layer.objects.active = base_objs[0]
-            bpy.ops.object.join()
-            
-            return bpy.context.view_layer.objects.active
-        else:
-            return None
-
     if armature_mode == 'PER_COMPONENT':
         for obj in base_objs:
             mesh_name = obj.name.split('-')[0]
@@ -220,7 +206,7 @@ def process_base_collection(collection, mode, ignore_hair, ignore_head, armature
                 new_name = f"{mesh_name}_{vg.name}"
                 vg.name = new_name
             obj.name = f"{obj.name}"
-            
+
     elif armature_mode == 'MERGED':
         body_shared_meshes = [obj for obj in base_objs if 'body' in obj.name.lower()]
         other_meshes = [obj for obj in base_objs if 'body' not in obj.name.lower()]
@@ -234,15 +220,6 @@ def process_base_collection(collection, mode, ignore_hair, ignore_head, armature
             joined_body_shared_mesh = bpy.context.view_layer.objects.active
             other_meshes.append(joined_body_shared_mesh)
         
-
-        for obj in other_meshes:
-            if 'body' not in obj.name.lower():
-                mesh_name = obj.name.split('-')[0]
-                for vg in obj.vertex_groups:
-                    new_name = f"{mesh_name}_{vg.name}"
-                    vg.name = new_name
-            obj.name = f"{obj.name}"
-        
         base_objs = [joined_body_shared_mesh] + other_meshes
 
     bpy.ops.object.select_all(action='DESELECT')
@@ -253,7 +230,14 @@ def process_base_collection(collection, mode, ignore_hair, ignore_head, armature
         bpy.context.view_layer.objects.active = base_objs[0]
         bpy.ops.object.join()
         
-        return bpy.context.view_layer.objects.active
+        joined_obj = bpy.context.view_layer.objects.active
+
+        if armature_mode == 'PER_COMPONENT' and mode not in ['GENSHIN', 'WUWA']:
+            mesh_name = joined_obj.name.split('-')[0]
+            for vg in joined_obj.vertex_groups:
+                vg.name = f"{mesh_name}_{vg.name}"
+        
+        return joined_obj
     else:
         return None
     
@@ -521,9 +505,10 @@ class SetupCharacterForArmatureOperator(Operator):
             self.report({'ERROR'}, "Base collection not found.")
 
         return {'FINISHED'}
-    
-class CleanArmatureOperator(Operator):
-    """Clean Armature Object by removing bones not linked to any vertex group"""
+
+#MARK: CLEAN ARMATURE    
+class CleanArmatureOperator(bpy.types.Operator):
+    """Clean Armature Object by removing bones not linked to any vertex group, except those with specified prefixes"""
     bl_idname = "object.clean_armature"
     bl_label = "Clean Armature"
     bl_options = {'REGISTER', 'UNDO'}
@@ -551,8 +536,8 @@ class CleanArmatureOperator(Operator):
 
             print(f"Vertex groups: {vertex_group_names}")
 
-
-            bones_to_delete = [bone for bone in armature.edit_bones if bone.name not in vertex_group_names]
+            prefixes_to_exclude = ("Shoulder", "Scapula", "Knee", "Elbow")
+            bones_to_delete = [bone for bone in armature.edit_bones if bone.name not in vertex_group_names and not any(bone.name.startswith(prefix) for prefix in prefixes_to_exclude)]
             print(f"Bones to delete: {bones_to_delete}")
 
             for bone in bones_to_delete:
@@ -577,6 +562,7 @@ class SplitMeshByVertexGroupsOperator(Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
+        start_time = time.time()
         props = context.scene.armature_matching_props
         base_collection = props.base_collection
         
@@ -586,8 +572,13 @@ class SplitMeshByVertexGroupsOperator(Operator):
         
         base_objs = [obj for obj in base_collection.objects if obj.type == 'MESH']
         for obj in base_objs:
+            rename_start = time.time()
             self.rename_mesh_based_on_vertex_groups(obj, base_collection)
+            rename_end = time.time()
+            print(f"Time to rename mesh based on vertex groups: {rename_end - rename_start} seconds")
         
+        end_time = time.time()
+        print(f"Total execution time: {end_time - start_time} seconds")
         self.report({'INFO'}, "Mesh split by vertex groups.")
         return {'FINISHED'}
 
@@ -613,28 +604,43 @@ class SplitMeshByVertexGroupsOperator(Operator):
 
     @staticmethod
     def separate_mesh_by_vertex_group_prefix(obj):
+        separate_start = time.time()
         vertex_groups_dict = {}
         for vg in obj.vertex_groups:
             parts = vg.name.split('_')
-            prefix = parts[0] if not SplitMeshByVertexGroupsOperator.is_numeric(parts[0]) else "numeric_groups"
+            prefix = parts[0] if not parts[0].isdigit() else "numeric_groups"
             if prefix not in vertex_groups_dict:
                 vertex_groups_dict[prefix] = []
-            vertex_groups_dict[prefix].append(vg.name)
+            vertex_groups_dict[prefix].append(vg.index)
+        
+        bpy.context.view_layer.objects.active = obj
         bpy.ops.object.mode_set(mode='EDIT')
         separated_objects = []
-        for prefix, vgs in vertex_groups_dict.items():
-            bpy.ops.mesh.select_all(action='DESELECT')
-            for vg_name in vgs:
-                vg = obj.vertex_groups.get(vg_name)
-                if vg is None:
-                    continue
-                bpy.ops.object.vertex_group_set_active(group=vg.name)
-                bpy.ops.object.vertex_group_select()
+        
+        mesh = obj.data
+        bpy.ops.mesh.select_all(action='DESELECT')
+
+        for prefix, group_indices in vertex_groups_dict.items():
+            bpy.ops.object.mode_set(mode='OBJECT')
+            for v in mesh.vertices:
+                v.select = False
+                for g in v.groups:
+                    if g.group in group_indices:
+                        v.select = True
+                        break
+            bpy.ops.object.mode_set(mode='EDIT')
+            
             bpy.ops.mesh.separate(type='SELECTED')
+            
+            bpy.ops.object.mode_set(mode='OBJECT')
             new_obj = bpy.context.selected_objects[-1]
             new_obj.name = f"{obj.name}_{prefix}"
             separated_objects.append(new_obj)
+
         bpy.ops.object.mode_set(mode='OBJECT')
+        
+        separate_end = time.time()
+        print(f"Time to separate mesh by vertex group prefix: {separate_end - separate_start} seconds")
         return separated_objects
 
     @staticmethod
@@ -663,23 +669,40 @@ class SplitMeshByVertexGroupsOperator(Operator):
         vertex_groups = obj.vertex_groups
         if not vertex_groups:
             return
+        
         group_names = [vg.name for vg in vertex_groups]
         all_numeric = all(SplitMeshByVertexGroupsOperator.is_numeric(name.split('_')[0]) for name in group_names)
+        
         if all_numeric:
             obj.name = f"{base_collection.name}Body"
         else:
             prefix = group_names[0].split('_')[0]
             obj.name = f"{prefix}"
+        
         selected_obj = bpy.context.active_object
         if selected_obj and selected_obj.type == 'MESH':
+            bpy.context.view_layer.objects.active = selected_obj
+            selected_obj.select_set(True)
             separated_objects = SplitMeshByVertexGroupsOperator.separate_mesh_by_vertex_group_prefix(selected_obj)
+
+            
+            remove_start = time.time()
             bpy.data.objects.remove(selected_obj, do_unlink=True)
+            bpy.ops.object.select_all(action='DESELECT')
+            
             for obj in separated_objects:
+                obj.select_set(True)
                 SplitMeshByVertexGroupsOperator.remove_unused_vertex_groups(obj)
                 SplitMeshByVertexGroupsOperator.rename_mesh_based_on_vertex_groups(obj, base_collection)
                 SplitMeshByVertexGroupsOperator.delete_empty_shapekeys(obj)
+
+            bpy.context.view_layer.objects.active = separated_objects[0] if separated_objects else None
+            bpy.ops.object.mode_set(mode='OBJECT')
+            remove_end = time.time()
+            print(f"Time to process separated objects: {remove_end - remove_start} seconds")
             SplitMeshByVertexGroupsOperator.combine_numeric_groups()
             meshes = [obj for obj in bpy.data.objects if obj.type == 'MESH']
+            bpy.ops.object.select_all(action='DESELECT')
             for mesh in meshes:
                 mesh.select_set(True)
             bpy.context.view_layer.objects.active = meshes[0] if meshes else None
