@@ -190,43 +190,55 @@ def process_base_collection(collection, mode, ignore_hair, ignore_head, armature
         base_objs = [obj for obj in base_objs if 'head' not in obj.name.lower()]
 
     if mode in ['HONKAI', 'ZENLESS']:
-        base_objs = [obj for obj in base_objs if 'face' not in obj.name.lower()]
-        
-        body_meshes = [obj for obj in base_objs if 'body' in obj.name.lower()]
-        other_meshes = [obj for obj in base_objs if 'body' not in obj.name.lower()]
-        
-        if body_meshes:
+        if armature_mode == 'MERGED':
+            body_meshes = [obj for obj in base_objs if 'body' in obj.name.lower()]
+            other_meshes = [obj for obj in base_objs if 'body' not in obj.name.lower()]
+            
+            if body_meshes:
+                bpy.ops.object.select_all(action='DESELECT')
+                for obj in body_meshes:
+                    obj.select_set(True)
+                bpy.context.view_layer.objects.active = body_meshes[0]
+                bpy.ops.object.join()
+                joined_body_mesh = bpy.context.view_layer.objects.active
+                base_objs = [joined_body_mesh] + other_meshes
+            else:
+                other_meshes = base_objs
+            
+            for obj in other_meshes:
+                mesh_name = obj.name.split('-')[0]
+                for vg in obj.vertex_groups:
+                    if not vg.name.startswith(mesh_name + "_"):
+                        vg.name = f"{mesh_name}_{vg.name}"
+                if not obj.name.startswith(mesh_name + "_"):
+                    obj.name = f"{mesh_name}_{obj.name}"
+
+        elif armature_mode == 'PER_COMPONENT':
+            for obj in base_objs:
+                mesh_name = obj.name.split('-')[0]
+                for vg in obj.vertex_groups:
+                    if not vg.name.startswith(mesh_name + "_"):
+                        vg.name = f"{mesh_name}_{vg.name}"
+                if not obj.name.startswith(mesh_name + "_"):
+                    obj.name = f"{mesh_name}_{obj.name}"
+
+    elif mode in ['GENSHIN', 'WUWA']:
+        if armature_mode == 'MERGED':
             bpy.ops.object.select_all(action='DESELECT')
-            for obj in body_meshes:
+            for obj in base_objs:
                 obj.select_set(True)
-            bpy.context.view_layer.objects.active = body_meshes[0]
+            bpy.context.view_layer.objects.active = base_objs[0]
             bpy.ops.object.join()
-            joined_body_mesh = bpy.context.view_layer.objects.active
-            other_meshes.append(joined_body_mesh)
-        base_objs = other_meshes
-
-    if armature_mode == 'PER_COMPONENT':
-        for obj in base_objs:
-            mesh_name = obj.name.split('-')[0]
-            for vg in obj.vertex_groups:
-                new_name = f"{mesh_name}_{vg.name}"
-                vg.name = new_name
-            obj.name = f"{obj.name}"
-
-    elif armature_mode == 'MERGED':
-        body_shared_meshes = [obj for obj in base_objs if 'body' in obj.name.lower()]
-        other_meshes = [obj for obj in base_objs if 'body' not in obj.name.lower()]
-
-        if body_shared_meshes:
-            bpy.ops.object.select_all(action='DESELECT')
-            for obj in body_shared_meshes:
-                obj.select_set(True)
-            bpy.context.view_layer.objects.active = body_shared_meshes[0]
-            bpy.ops.object.join()
-            joined_body_shared_mesh = bpy.context.view_layer.objects.active
-            base_objs = [joined_body_shared_mesh] + other_meshes
-        else:
-            base_objs = other_meshes
+            return bpy.context.view_layer.objects.active
+        
+        elif armature_mode == 'PER_COMPONENT':
+            for obj in base_objs:
+                mesh_name = obj.name.split('-')[0]
+                for vg in obj.vertex_groups:
+                    if not vg.name.startswith(mesh_name + "_"):
+                        vg.name = f"{mesh_name}_{vg.name}"
+                if not obj.name.startswith(mesh_name + "_"):
+                    obj.name = f"{mesh_name}_{obj.name}"
 
     bpy.ops.object.select_all(action='DESELECT')
     for obj in base_objs:
@@ -237,12 +249,6 @@ def process_base_collection(collection, mode, ignore_hair, ignore_head, armature
         bpy.ops.object.join()
         
         joined_obj = bpy.context.view_layer.objects.active
-
-        if armature_mode == 'PER_COMPONENT' and mode not in ['GENSHIN', 'WUWA']:
-            mesh_name = joined_obj.name.split('-')[0]
-            for vg in joined_obj.vertex_groups:
-                vg.name = f"{mesh_name}_{vg.name}"
-        
         return joined_obj
     else:
         return None
