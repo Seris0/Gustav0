@@ -1,5 +1,12 @@
 # ArmatureXXMI Add-on
 
+## Personal Recommendations
+
+- **Genshin Impact**: MERGED
+- **Honkai Star Rail**: PER-COMPONENT
+- **Zenless Zone Zero**: PER-COMPONENT
+- **Wuthering Waves**: MERGED initially, but may change based on the skeleton type you import in WWMI
+
 This script is an add-on for Blender that facilitates the setup of armatures for certain anime games. It offers various functionalities for vertex group matching, armature mirroring, and character preparation.
 
 For a better experience, use it together with [XXMI_Tool_QuickImport_42.py](https://github.com/Seris0/Gustav0/blob/main/Addons/XXMI_Tool_QuickImport_42.py).
@@ -71,7 +78,7 @@ This add-on is intended to be used by advanced users. I will not explain how it 
    - Removes bones from the armature that are not linked to any vertex groups.
 
 6. **Split Mesh by Vertex Groups**
-   - Identifies all identical prefixes Vertex Groups and split the mesh based on them, then cleans up the empty vertex groups.
+   - Identifies all identical prefixes Vertex Groups and splits the mesh based on them, then cleans up the empty vertex groups.
 
 ## Installation and Usage
 
@@ -79,7 +86,6 @@ This add-on is intended to be used by advanced users. I will not explain how it 
 2. Activate the add-on through the Blender add-ons preferences menu.
 3. Use the "ArmatureXXMI" panel in the "XXMI Scripts" section of Blender's 3D editor to access the add-on's functionalities.
 4. For a demonstration of the add-on in action, watch the video [here](https://streamable.com/7lf7yw).
-
 
 ## Author
 
