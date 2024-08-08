@@ -3,7 +3,7 @@
 ## Personal Recommendations
 
 - **Genshin Impact**: MERGED
-- **Honkai Star Rail**: PER-COMPONENT
+- **Honkai Star Rail**: MERGED
 - **Zenless Zone Zero**: PER-COMPONENT
 - **Wuthering Waves**: MERGED initially, but may change based on the skeleton type you import in WWMI
 
