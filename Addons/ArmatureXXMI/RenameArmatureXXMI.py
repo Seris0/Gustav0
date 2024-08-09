@@ -190,7 +190,7 @@ def process_base_collection(collection, mode, ignore_hair, ignore_head, armature
         base_objs = [obj for obj in base_objs if 'head' not in obj.name.lower()]
 
     if mode in ['HONKAI', 'ZENLESS']:
-        if armature_mode == 'MERGED':
+        if armature_mode in ['MERGED', 'PER_COMPONENT']:
             body_meshes = [obj for obj in base_objs if 'body' in obj.name.lower()]
             other_meshes = [obj for obj in base_objs if 'body' not in obj.name.lower()]
             
@@ -213,14 +213,14 @@ def process_base_collection(collection, mode, ignore_hair, ignore_head, armature
                 if not obj.name.startswith(mesh_name + "_"):
                     obj.name = f"{mesh_name}_{obj.name}"
 
-        elif armature_mode == 'PER_COMPONENT':
-            for obj in base_objs:
-                mesh_name = obj.name.split('-')[0]
-                for vg in obj.vertex_groups:
-                    if not vg.name.startswith(mesh_name + "_"):
-                        vg.name = f"{mesh_name}_{vg.name}"
-                if not obj.name.startswith(mesh_name + "_"):
-                    obj.name = f"{mesh_name}_{obj.name}"
+        # elif armature_mode == 'PER_COMPONENT':
+        #     for obj in base_objs:
+        #         mesh_name = obj.name.split('-')[0]
+        #         for vg in obj.vertex_groups:
+        #             if not vg.name.startswith(mesh_name + "_"):
+        #                 vg.name = f"{mesh_name}_{vg.name}"
+        #         if not obj.name.startswith(mesh_name + "_"):
+        #             obj.name = f"{mesh_name}_{obj.name}"
 
     elif mode in ['GENSHIN', 'WUWA']:
         if armature_mode == 'MERGED':
@@ -722,6 +722,31 @@ class SplitMeshByVertexGroupsOperator(Operator):
                 mesh.select_set(True)
             bpy.context.view_layer.objects.active = meshes[0] if meshes else None
 
+class ResetVertexGroupsNamesOperator(Operator):
+    """Reset Vertex Groups Names by removing prefixes"""
+    bl_idname = "object.reset_vertex_groups_names"
+    bl_label = "Reset Vertex Groups Names"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        props = context.scene.armature_matching_props
+        base_collection = props.base_collection
+
+        if not base_collection:
+            self.report({'ERROR'}, "Base collection not found.")
+            return {'CANCELLED'}
+
+        base_objs = [obj for obj in base_collection.objects if obj.type == 'MESH']
+
+        for obj in base_objs:
+            for vg in obj.vertex_groups:
+                new_name = vg.name.split('_')[-1]
+                if new_name.isdigit():
+                    vg.name = new_name
+
+        self.report({'INFO'}, "Vertex groups names reset successfully.")
+        return {'FINISHED'}
+    
 #MARK: PANEL   
 class ArmatureXXMIPanel(Panel):
     bl_label = "ArmatureXXMI"
@@ -761,6 +786,7 @@ class ArmatureXXMIPanel(Panel):
         layout.operator("object.setup_armature_for_character", icon='OUTLINER_OB_ARMATURE')
         layout.operator("object.setup_character_for_armature", icon='OUTLINER_OB_MESH')
         layout.operator("object.split_mesh_by_vertex_groups", icon='GROUP_VERTEX')
+        layout.operator("object.reset_vertex_groups_names", icon='OUTLINER_OB_GREASEPENCIL')
 
 
 classes = [
@@ -772,6 +798,7 @@ classes = [
     MirrorArmatureOperator,
     SplitMeshByVertexGroupsOperator,
     ArmatureXXMIPanel,
+    ResetVertexGroupsNamesOperator,
 ]
 
 def register():
