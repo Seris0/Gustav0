@@ -480,8 +480,8 @@ class SetupCharacterForArmatureOperator(Operator):
                             except Exception as e:
                                 print(f"Unexpected error joining body meshes: {e}")
                     base_objs = other_meshes
-
-            if armature_mode == 'PER_COMPONENT':
+        
+            if armature_mode == 'PER_COMPONENT' and mode != 'HONKAI':
                 for obj in base_objs:
                     if obj and obj.name in bpy.data.objects:
                         base_obj_name = obj.name.split('-')[0]
