@@ -463,7 +463,7 @@ class SetupCharacterForArmatureOperator(Operator):
                     body_meshes = [obj for obj in base_objs if 'body' in obj.name.lower()]
                     other_meshes = [obj for obj in base_objs if 'body' not in obj.name.lower()]
 
-                    if body_meshes and mode in {'HONKAI', 'ZENLESS'}:
+                    if body_meshes and mode in { 'ZENLESS'}:
                         bpy.ops.object.select_all(action='DESELECT')
                         for obj in body_meshes:
                             if obj and obj.name in bpy.data.objects:
@@ -498,7 +498,7 @@ class SetupCharacterForArmatureOperator(Operator):
                                 if not vg.name.startswith(f"{base_obj_name}_"):
                                     vg.name = f"{base_obj_name}_{vg.name}"
 
-            if not join_performed and mode != 'WUWA':
+            if not join_performed and mode not in {'WUWA', 'HONKAI'}: 
                 bpy.ops.object.select_all(action='DESELECT')
                 for obj in base_objs:
                     if obj and obj.name in bpy.data.objects:

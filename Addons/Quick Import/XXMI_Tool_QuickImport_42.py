@@ -37,42 +37,142 @@ class GIMI_TOOLS_PT_main_panel(bpy.types.Panel):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_category = 'XXMI Scripts'
-    # bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
         layout = self.layout
 
+       
         box = layout.box()
-        box.label(text="Vertex Groups", icon='GROUP_VERTEX')
-        row = box.row()
-        row.prop(context.scene, "Largest_VG", text="Largest VG")
-        row = box.row()
-        row.operator("GIMI_TOOLS.fill_vgs", text="Fill Vertex Groups", icon='ADD')
-        row = box.row()
-        row.operator("GIMI_TOOLS.remove_unused_vgs", text="Remove Unused VG's", icon='X')
-        row = box.row()
-        row.operator("GIMI_TOOLS.remove_all_vgs", text="Remove All VG's", icon='CANCEL')
-        row = box.row()
-        row.operator("object.separate_by_material_and_rename", text="Separate by Material", icon='MATERIAL')
-        row = box.row()
-        # Merge VG's Modes
-        layout.prop(context.scene, "merge_mode", text="Merge Mode")
-        if context.scene.merge_mode == 'MODE1':
-            layout.prop(context.scene, "vertex_groups", text="Vertex Groups")
-        elif context.scene.merge_mode == 'MODE2':
-            layout.prop(context.scene, "smallest_group_number", text="Smallest Group")
-            layout.prop(context.scene, "largest_group_number", text="Largest Group")
-        layout.operator("object.merge_vertex_groups", text="Merge Vertex")
-        # VG Remap
+        box.prop(context.scene, "show_vertex", icon="TRIA_DOWN" if context.scene.show_vertex else "TRIA_RIGHT", emboss=False, text="Main Tools")
+        if context.scene.show_vertex:
+         
+            box.label(text="Vertex Groups", icon='GROUP_VERTEX')
+            row = box.row()
+            row.prop(context.scene, "Largest_VG", text="Largest VG")
+            row = box.row()
+            row.operator("GIMI_TOOLS.fill_vgs", text="Fill Vertex Groups", icon='ADD')
+            row = box.row()
+            row.operator("GIMI_TOOLS.remove_unused_vgs", text="Remove Unused VG's", icon='X')
+            row = box.row()
+            row.operator("GIMI_TOOLS.remove_all_vgs", text="Remove All VG's", icon='CANCEL')
+            row = box.row()
+            row.operator("object.separate_by_material_and_rename", text="Separate by Material", icon='MATERIAL')
+            row = box.row()
+
+            # Vertex Group Merge Section
+            layout.prop(context.scene, "merge_mode", text="Merge Mode")
+            if context.scene.merge_mode == 'MODE1':
+                layout.prop(context.scene, "vertex_groups", text="Vertex Groups")
+            elif context.scene.merge_mode == 'MODE2':
+                layout.prop(context.scene, "smallest_group_number", text="Smallest Group")
+                layout.prop(context.scene, "largest_group_number", text="Largest Group")
+            layout.operator("object.merge_vertex_groups", text="Merge Vertex")
+        
+    
         box = layout.box()
-        box.label(text="Vertex Group REMAP", icon='FILE_REFRESH')
-        row = box.row()
-        row.prop_search(context.scene, "vgm_source_object", bpy.data, "objects", text="Source")
-        row = box.row()
-        row.prop_search(context.scene, "vgm_destination_object", bpy.data, "objects", text="Target")
-        row = box.row()
-        row.operator("object.vertex_group_remap", text="Run Remap")  
-          
+        box.prop(context.scene, "show_remap", icon="TRIA_DOWN" if context.scene.show_remap else "TRIA_RIGHT", emboss=False, text="Vertex Group REMAP")
+        if context.scene.show_remap:
+            box.label(text="Vertex Group REMAP", icon='FILE_REFRESH')  
+            row = box.row()
+            row.prop_search(context.scene, "vgm_source_object", bpy.data, "objects", text="Source")
+            row = box.row()
+            row.prop_search(context.scene, "vgm_destination_object", bpy.data, "objects", text="Target")
+            row = box.row()
+            row.operator("object.vertex_group_remap", text="Run Remap", icon='FILE_REFRESH')  
+
+        # Collapsible Transfer Properties Section
+        box = layout.box()
+        box.prop(context.scene, "show_transfer", icon="TRIA_DOWN" if context.scene.show_transfer else "TRIA_RIGHT", emboss=False, text="Transfer Properties")
+        if context.scene.show_transfer:
+            box.label(text="Transfer Properties", icon='OUTLINER_OB_GROUP_INSTANCE')  
+            row = box.row()
+            row.prop(context.scene, "transfer_mode", text="Transfer Mode")
+            if context.scene.transfer_mode == 'COLLECTION':
+                row = box.row()
+                row.prop_search(context.scene, "base_collection", bpy.data, "collections", text="Original Properties:")
+                row = box.row()
+                row.prop_search(context.scene, "target_collection", bpy.data, "collections", text="Missing Properties:")
+            else:
+                row = box.row()
+                row.prop_search(context.scene, "base_objectproperties", bpy.data, "objects", text="Original Mesh:")
+                row = box.row()
+                row.prop_search(context.scene, "target_objectproperties", bpy.data, "objects", text="Modded Mesh:")
+            row = box.row()
+            row.operator("object.transfer_properties", text="Transfer Properties", icon='OUTLINER_OB_GROUP_INSTANCE')  
+
+
+
+class OBJECT_OT_transfer_properties(bpy.types.Operator):
+    bl_idname = "object.transfer_properties"
+    bl_label = "Transfer Properties"
+    bl_description = "Transfer custom properties and transformation data (location, rotation, scale) from one object to another or between collections."
+
+    def execute(self, context):
+        mode = context.scene.transfer_mode
+
+        if mode == 'COLLECTION':
+            base_collection = context.scene.base_collection
+            target_collection = context.scene.target_collection
+
+            if not base_collection or not target_collection:
+                self.report({'ERROR'}, 
+                    "Invalid Collection(s) selected.\n"
+                    "Please make sure you have selected valid collections for both 'Original Properties' and 'Missing Properties' in the panel.")
+                return {'CANCELLED'}
+
+            base_prefix_dict = {}
+            for base_obj in base_collection.objects:
+                prefix = base_obj.name.split("-")[0]
+                base_prefix_dict[prefix] = base_obj
+
+            transferred = []
+            for target_obj in target_collection.objects:
+                target_prefix = target_obj.name.split("-")[0]
+                if target_prefix in base_prefix_dict:
+                    base_obj = base_prefix_dict[target_prefix]
+                    for key in base_obj.keys():
+                        target_obj[key] = base_obj[key]
+                    target_obj.location = base_obj.location
+                    target_obj.rotation_euler = base_obj.rotation_euler
+                    target_obj.scale = base_obj.scale  
+
+                    print(f"Transferred properties from '{base_obj.name}' to '{target_obj.name}':")
+                    print(f"  Location: {target_obj.location}")
+                    print(f"  Rotation: {target_obj.rotation_euler}")
+                    print(f"  Scale: {target_obj.scale}")
+                    transferred.append(target_obj.name)
+
+            if not transferred:
+                self.report({'INFO'}, 
+                    "No matching prefixes found in the target collection.\n"
+                    "Ensure that the object names in the target collection have the same prefixes as those in the base collection.")
+            else:
+                self.report({'INFO'}, f"Properties transferred to: {', '.join(transferred)}")
+
+        else:
+            base_obj = context.scene.base_objectproperties
+            target_obj = context.scene.target_objectproperties
+
+            if not base_obj or not target_obj:
+                self.report({'ERROR'}, 
+                    "Invalid Mesh(es) selected.\n"
+                    "Please ensure you have selected valid objects for both 'Original Mesh' and 'Modded Mesh' in the panel.")
+                return {'CANCELLED'}
+
+            for key in base_obj.keys():
+                target_obj[key] = base_obj[key]
+
+            target_obj.location = base_obj.location
+            target_obj.rotation_euler = base_obj.rotation_euler
+            target_obj.scale = base_obj.scale  
+
+            print(f"Transferred properties from '{base_obj.name}' to '{target_obj.name}':")
+            print(f"  Location: {target_obj.location}")
+            print(f"  Rotation: {target_obj.rotation_euler}")
+            print(f"  Scale: {target_obj.scale}")
+
+        return {'FINISHED'}
+             
 # MARK: MERGE VGS
 class OBJECT_OT_merge_vertex_groups(bpy.types.Operator):
     bl_idname = "object.merge_vertex_groups"
@@ -322,14 +422,14 @@ class QuickImportSettings(bpy.types.PropertyGroup):
         default=False,
         description="Reset the rotation of the object upon import"
     ) #type: ignore 
-    apply_textures: BoolProperty(
-        name="Apply Textures",
+    import_textures: BoolProperty(
+        name="Import Textures",
         default=True,
         description="Apply Materials and Textures"
     ) #type: ignore 
     create_collection: BoolProperty(
         name="Create Collection",
-        default=False,
+        default=True,
         description="Create a new collection based on the folder name"
     ) #type: ignore e: ignore 
 
@@ -371,7 +471,7 @@ class TextureHandler:
             mesh_name = bpy.path.display_name_from_filepath(os.path.join(path, file))
             mesh_name = mesh_name[:-7]
 
-            if context.scene.quick_import_settings.apply_textures:
+            if context.scene.quick_import_settings.import_textures:
                 TextureHandler.import_dafile(context, file=os.path.join(path, file))
 
                 material_name = "mat_" + mesh_name
@@ -386,7 +486,7 @@ class TextureHandler:
                         obj.data.materials.append(bpy.data.materials.get(mat))
                         importedmeshes.append(obj)
             else:
-                print(f"Skipping texture import for {file} as apply_textures is disabled.")
+                print(f"Skipping texture import for {file} as import_textures is disabled.")
 
         return importedmeshes
 
@@ -409,7 +509,7 @@ class GIMI_TOOLS_PT_quick_import_panel(bpy.types.Panel):
         layout.prop(scene.quick_import_settings, "reset_rotation")
 
         row = layout.row(align=True)
-        row.prop(context.scene.quick_import_settings, "apply_textures")
+        row.prop(context.scene.quick_import_settings, "import_textures")
         row.prop(context.scene.quick_import_settings, "create_collection")
 
 class QuickImport(Import3DMigotoFrameAnalysis):
@@ -461,7 +561,7 @@ class QuickImport(Import3DMigotoFrameAnalysis):
             bpy.ops.mesh.remove_doubles(use_sharp_edge_from_normals=True)   
             bpy.ops.mesh.delete_loose()
             
-        if context.scene.quick_import_settings.apply_textures:
+        if context.scene.quick_import_settings.import_textures:
             bpy.ops.object.mode_set(mode='EDIT')          
             bpy.ops.mesh.select_all(action='SELECT')
             bpy.ops.mesh.delete_loose()
@@ -520,6 +620,7 @@ def register():
         GIMI_TOOLS_OT_remove_unused_vgs,
         GIMI_TOOLS_OT_remove_all_vgs,
         GIMI_TOOLS_PT_quick_import_panel,
+        OBJECT_OT_transfer_properties,
         OBJECT_OT_vertex_group_remap,
         OBJECT_OT_merge_vertex_groups,
         QuickImport,
@@ -531,6 +632,21 @@ def register():
         bpy.utils.register_class(cls)
 
     #pointers
+    cfg.show_vertex = bpy.props.BoolProperty(name="Show Vertex", default=False)
+    cfg.show_remap = bpy.props.BoolProperty(name="Show Remap", default=False)
+    cfg.show_transfer = bpy.props.BoolProperty(name="Show Transfer", default=False)
+    cfg.base_collection = bpy.props.PointerProperty(type=bpy.types.Collection, description="Base Collection")
+    cfg.target_collection = bpy.props.PointerProperty(type=bpy.types.Collection, description="Target Collection")
+    cfg.base_objectproperties = bpy.props.PointerProperty(type=bpy.types.Object, description="Base Object")
+    cfg.target_objectproperties = bpy.props.PointerProperty(type=bpy.types.Object, description="Target Object")
+    cfg.transfer_mode = bpy.props.EnumProperty(
+        items=[
+            ('COLLECTION', 'Collection Transfer', 'Transfer properties between collections'),
+            ('MESH', 'Mesh Transfer', 'Transfer properties between meshes')
+        ],
+        default='MESH',
+        description="Mode of Transfer"
+    )
     cfg.base_object = bpy.props.PointerProperty(type=bpy.types.Object, description="Base Object for operations")
     cfg.target_object = bpy.props.PointerProperty(type=bpy.types.Object, description="Target Object for operations")
     cfg.Largest_VG = bpy.props.IntProperty(description="Value for Largest Vertex Group")
@@ -563,6 +679,7 @@ def unregister():
         GIMI_TOOLS_OT_remove_unused_vgs,
         GIMI_TOOLS_OT_remove_all_vgs,
         GIMI_TOOLS_PT_quick_import_panel,
+        OBJECT_OT_transfer_properties,
         OBJECT_OT_vertex_group_remap,
         OBJECT_OT_merge_vertex_groups,
         QuickImport,
@@ -573,6 +690,9 @@ def unregister():
     for cls in classes:
         bpy.utils.unregister_class(cls)
 
+    del cfg.show_vertex
+    del cfg.show_remap
+    del cfg.show_transfer
     del cfg.base_object
     del cfg.target_object
     del cfg.Largest_VG
@@ -586,6 +706,11 @@ def unregister():
     del cfg.smallest_group_number
     del cfg.largest_group_number
     del cfg.quick_import_settings
+    del cfg.base_collection
+    del cfg.target_collection
+    del cfg.base_objectproperties
+    del cfg.target_objectproperties
+    del cfg.transfer_mode
     
     bpy.types.VIEW3D_MT_object.remove(menu_func)
     for km, kmi in addon_keymaps:
