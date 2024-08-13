@@ -4025,17 +4025,17 @@ def force_remap(folder):
         try:
             option = int(input('Select a character to remap: ')) - 1
             if option < 0 or option >= len(remaps):
-                print('Invalid option')  # Print invalid option message
+                print('Invalid option')  
                 option = -1
         except ValueError:
-            print('Invalid option')  # Print invalid option message
+            print('Invalid option') 
             option = -1
     option_key = list(remaps.keys())[option]
 
     for root, dirs, files in os.walk(folder):
         blend_files = [os.path.join(root, file) for file in files if "blend" in file.lower() and ".buf" in file.lower()]
         if not blend_files:
-            print("No blend files found in this folder. Aborting!")  # Print no blend files message
+            print("No blend files found in this folder. Aborting!")  
             continue
 
         for blend_file in blend_files:
@@ -4045,9 +4045,9 @@ def force_remap(folder):
                     remap_data = remap(blend_data, remaps[option_key][1])
                 with open(blend_file, "wb") as g:
                     g.write(remap_data)
-                    print(f"File: {blend_file} VGs remapped successfully!")  # Print success message
+                    print(f"File: {blend_file} VGs remapped successfully!")  
             except Exception as e:
-                print(f'Error processing file: {blend_file}')  # Print error message
+                print(f'Error processing file: {blend_file}')  
                 print(str(e))
                 continue
 
