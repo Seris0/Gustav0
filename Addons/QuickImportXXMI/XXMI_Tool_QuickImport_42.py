@@ -25,7 +25,7 @@ except ImportError:
 bl_info = {
     "name": "XXMI Scripts & Quick Import",
     "author": "Gustav0, LeoTorreZ",
-    "version": (1, 0),
+    "version": (2, 0),
     "blender": (3, 6, 2),
     "description": "Script Compilation",
     "category": "Object",
@@ -131,6 +131,13 @@ class OBJECT_OT_transfer_properties(bpy.types.Operator):
                 target_prefix = target_obj.name.split("-")[0]
                 if target_prefix in base_prefix_dict:
                     base_obj = base_prefix_dict[target_prefix]
+
+                  
+                    for key in list(target_obj.keys()):
+                        if key not in '_RNA_UI':  
+                            del target_obj[key]
+
+                   
                     for key in base_obj.keys():
                         target_obj[key] = base_obj[key]
                     target_obj.location = base_obj.location
@@ -160,6 +167,12 @@ class OBJECT_OT_transfer_properties(bpy.types.Operator):
                     "Please ensure you have selected valid objects for both 'Original Mesh' and 'Modded Mesh' in the panel.")
                 return {'CANCELLED'}
 
+          
+            for key in list(target_obj.keys()):
+                if key not in '_RNA_UI': 
+                    del target_obj[key]
+
+           
             for key in base_obj.keys():
                 target_obj[key] = base_obj[key]
 
@@ -538,18 +551,18 @@ class GIMI_TOOLS_PT_quick_import_panel(bpy.types.Panel):
  
     def draw(self, context):
         layout = self.layout
-        scene = context.scene
+        cfg = context.scene.quick_import_settings
 
         row = layout.row()
         row.operator("import_scene.3dmigoto_frame_analysis", text="Setup Character", icon='IMPORT')
 
-        layout.prop(context.scene.quick_import_settings, "tri_to_quads")
-        layout.prop(context.scene.quick_import_settings, "merge_by_distance")
-        layout.prop(scene.quick_import_settings, "reset_rotation")
+        layout.prop(cfg, "tri_to_quads")
+        layout.prop(cfg, "merge_by_distance")
+        layout.prop(cfg, "reset_rotation")
 
         row = layout.row(align=True)
-        row.prop(context.scene.quick_import_settings, "import_textures")
-        row.prop(context.scene.quick_import_settings, "create_collection")
+        row.prop(cfg, "import_textures")
+        row.prop(cfg, "create_collection")
 
 class QuickImport(Import3DMigotoFrameAnalysis):
     bl_idname = "import_scene.3dmigoto_frame_analysis"
@@ -655,26 +668,33 @@ def menu_func_import(self, context):
     self.layout.operator(QuickImport.bl_idname, text="Quick Import for XXMI")   
 
 
-def register():
-    cfg = bpy.types.Scene
-    classes = [
-        GIMI_TOOLS_PT_main_panel,
-        GIMI_TOOLS_OT_fill_vgs,
-        GIMI_TOOLS_OT_remove_unused_vgs,
-        GIMI_TOOLS_OT_remove_all_vgs,
-        GIMI_TOOLS_PT_quick_import_panel,
-        OBJECT_OT_transfer_properties,
-        OBJECT_OT_vertex_group_remap,
-        OBJECT_OT_merge_vertex_groups,
-        QuickImport,
-        QuickImportSettings,
-        OBJECT_OT_separate_by_material_and_rename
-    ]
+classes = [
+    GIMI_TOOLS_PT_main_panel,
+    GIMI_TOOLS_OT_fill_vgs,
+    GIMI_TOOLS_OT_remove_unused_vgs,
+    GIMI_TOOLS_OT_remove_all_vgs,
+    GIMI_TOOLS_PT_quick_import_panel,
+    OBJECT_OT_transfer_properties,
+    OBJECT_OT_vertex_group_remap,
+    OBJECT_OT_merge_vertex_groups,
+    QuickImport,
+    QuickImportSettings,
+    OBJECT_OT_separate_by_material_and_rename
+]
 
+def register_classes():
     for cls in classes:
         bpy.utils.register_class(cls)
 
-    #pointers
+def unregister_classes():
+    for cls in classes:
+        bpy.utils.unregister_class(cls)
+
+def register():
+    register_classes()
+    
+    # Pointers
+    cfg = bpy.types.Scene
     cfg.show_vertex = bpy.props.BoolProperty(name="Show Vertex", default=False)
     cfg.show_remap = bpy.props.BoolProperty(name="Show Remap", default=False)
     cfg.show_transfer = bpy.props.BoolProperty(name="Show Transfer", default=False)
@@ -696,8 +716,6 @@ def register():
     cfg.bone_object = bpy.props.PointerProperty(type=bpy.types.Object, description="Object containing bones")
     cfg.vgm_source_object = bpy.props.PointerProperty(type=bpy.types.Object, description="Source Object for Vertex Group Mapping")
     cfg.vgm_destination_object = bpy.props.PointerProperty(type=bpy.types.Object, description="Destination Object for Vertex Group Mapping")
-    bpy.types.TOPBAR_MT_file_import.append(menu_func_import)
-    
     cfg.merge_mode = bpy.props.EnumProperty(items=[
         ('MODE1', 'Mode 1: Single VG', 'Merge based on specific vertex groups'),
         ('MODE2', 'Mode 2: By Range ', 'Merge based on a range of vertex groups'),
@@ -708,31 +726,18 @@ def register():
     cfg.largest_group_number = bpy.props.IntProperty(name="Largest Group", default=999)
     cfg.quick_import_settings = bpy.props.PointerProperty(type=QuickImportSettings)
     
+    bpy.types.TOPBAR_MT_file_import.append(menu_func_import)
     bpy.types.VIEW3D_MT_object.append(menu_func)
+    
     wm = bpy.context.window_manager
     km = wm.keyconfigs.addon.keymaps.new(name='Object Mode', space_type='EMPTY')
     kmi = km.keymap_items.new(OBJECT_OT_separate_by_material_and_rename.bl_idname, 'P', 'PRESS')
     addon_keymaps.append((km, kmi))
 
 def unregister():
+    unregister_classes()
+    
     cfg = bpy.types.Scene
-    classes = [
-        GIMI_TOOLS_PT_main_panel,
-        GIMI_TOOLS_OT_fill_vgs,
-        GIMI_TOOLS_OT_remove_unused_vgs,
-        GIMI_TOOLS_OT_remove_all_vgs,
-        GIMI_TOOLS_PT_quick_import_panel,
-        OBJECT_OT_transfer_properties,
-        OBJECT_OT_vertex_group_remap,
-        OBJECT_OT_merge_vertex_groups,
-        QuickImport,
-        QuickImportSettings,
-        OBJECT_OT_separate_by_material_and_rename
-    ]
-
-    for cls in classes:
-        bpy.utils.unregister_class(cls)
-
     del cfg.show_vertex
     del cfg.show_remap
     del cfg.show_transfer
@@ -742,8 +747,6 @@ def unregister():
     del cfg.bone_object
     del cfg.vgm_source_object
     del cfg.vgm_destination_object
-    bpy.types.TOPBAR_MT_file_import.remove(menu_func_import)
-    
     del cfg.merge_mode
     del cfg.vertex_groups
     del cfg.smallest_group_number
@@ -755,7 +758,9 @@ def unregister():
     del cfg.target_objectproperties
     del cfg.transfer_mode
     
+    bpy.types.TOPBAR_MT_file_import.remove(menu_func_import)
     bpy.types.VIEW3D_MT_object.remove(menu_func)
+    
     for km, kmi in addon_keymaps:
         km.keymap_items.remove(kmi)
     addon_keymaps.clear()
