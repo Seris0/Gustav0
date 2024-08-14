@@ -12,15 +12,35 @@ from bpy.types import Object, Operator, Panel, PropertyGroup
 from bpy_extras.io_utils import unpack_list, ImportHelper, ExportHelper, axis_conversion
 from bpy.utils import register_class, unregister_class
 import numpy as np
+import re
+import importlib
  
 if bpy.app.version < (4, 2, 0):
     from blender_dds_addon import import_dds
 
+current_directory = os.path.dirname(os.path.realpath(__file__))
+pattern = r'XXMI-Tools'
+matching_directory = None
+for root, dirs, files in os.walk(current_directory):
+    for directory in dirs:
+        if re.search(pattern, directory):
+            matching_directory = os.path.join(root, directory)
+            break
+    if matching_directory:
+        break
+
+if matching_directory is None:
+    raise ImportError("No Module.")
+
+relative_path = os.path.relpath(matching_directory, current_directory)
+module_name = relative_path.replace(os.path.sep, '.').replace('.py', '') + ".migoto.operators"
 try:
-    from XXMI_Tools.migoto.operators import Import3DMigotoFrameAnalysis
-except ImportError:
-    module_name = "XXMI-Tools.migoto.operators"
-    Import3DMigotoFrameAnalysis = __import__(module_name, fromlist=['Import3DMigotoFrameAnalysis']).Import3DMigotoFrameAnalysis
+    module = importlib.import_module(module_name)
+    Import3DMigotoFrameAnalysis = getattr(module, 'Import3DMigotoFrameAnalysis')
+except ImportError as e:
+    print(f"Error Import module: {e}")
+except AttributeError as e:
+    print(f"Error'Import3DMigotoFrameAnalysis': {e}")
 
 bl_info = {
     "name": "XXMI Scripts & Quick Import",
@@ -313,25 +333,34 @@ class OBJECT_OT_vertex_group_remap(bpy.types.Operator):
     bl_idname = "object.vertex_group_remap"
     bl_label = "Vertex Group Remap"
     bl_options = {'REGISTER', 'UNDO'}
-    bl_description = "Remap the vg's between 2 selected objects"
+    bl_description = "Remap the vertex groups between two selected objects"
 
     def execute(self, context):
         source = context.scene.vgm_source_object
         destination = context.scene.vgm_destination_object
 
         if not source or not destination:
-            self.report({'ERROR'}, "Please, Select Target and Source object")
+            self.report({'ERROR'}, "Please, Select Source and Target object")
             return {'CANCELLED'}
 
         source_object = bpy.data.objects.get(source.name)
         destination_object = bpy.data.objects.get(destination.name)
 
         if not source_object or not destination_object:
-            self.report({'ERROR'}, "Please, Select Target and Source object")
+            self.report({'ERROR'}, "Please, Select Source and Target object")
             return {'CANCELLED'}
 
+   
         match_vertex_groups(source_object, destination_object)
         self.report({'INFO'}, "Vertex groups matched.")
+        
+
+        if destination_object and destination_object.type == 'MESH' and destination_object.vertex_groups:
+            vertex_group_names = [vg.name for vg in destination_object.vertex_groups]
+            print("Remapped VG's:", ", ".join(vertex_group_names))
+        else:
+            print("No vertex groups found in the target object.")
+
         bpy.ops.object.mode_set(mode='OBJECT')
         bpy.context.view_layer.objects.active = destination_object
         destination_object.select_set(True)
@@ -395,30 +424,22 @@ def find_nearest_center(base_centers, target_center):
             best_match = base_group_name
     return best_match
 
-def match_vertex_groups(base_obj, target_obj):
-    base_centers = get_all_weighted_centers(base_obj)
+def match_vertex_groups(source_obj, target_obj):
+    for target_group in target_obj.vertex_groups:
+        target_group.name = "unknown"
+    source_centers = get_all_weighted_centers(source_obj)
     target_centers = get_all_weighted_centers(target_obj)
 
-    for base_group in base_obj.vertex_groups:
-        base_center = base_centers.get(base_group.name)
-        if base_center is None:
+    for target_group in target_obj.vertex_groups:
+        target_center = target_centers.get(target_group.name)
+        if target_center is None:
             continue
 
-        best_match = None
-        best_distance = float('inf')
-
-        for target_group_name, target_center in target_centers.items():
-            if target_center is None:
-                continue
-
-            distance = np.linalg.norm(np.array(base_center) - np.array(target_center))
-            if distance < best_distance:
-                best_distance = distance
-                best_match = target_group_name
+        best_match = find_nearest_center(source_centers, target_center)
 
         if best_match:
-            base_group.name = best_match
-            print(f"Base group {base_group.index} renamed to {best_match}")
+            target_group.name = best_match
+            print(f"Target group {target_group.index} renamed to {best_match}")
 
 class QuickImportSettings(bpy.types.PropertyGroup):
     tri_to_quads: BoolProperty(

@@ -3976,10 +3976,14 @@ remaps = {"caddc4c6": ('Amber Global',[7,6,9,10,11,29,8,12,13,14,15,16,17,77,1,0
                        
         }
 
-def collect_ini_files(folder_path):
+def collect_ini_files(folder_path, disablefile):
     print("\nProcessing ini files, please wait, it may take seconds to minutes")
     ini_files = []
-    exclude_keywords = ['desktop', 'ntuser', 'disabled_backup', 'disabled']
+    
+    exclude_keywords = ['desktop', 'ntuser', 'disabled_backup', "disabled"]
+
+    if disablefile:
+        exclude_keywords.remove('disabled')
 
     for root, dirs, files in os.walk(folder_path):
         if 'BufferValues' in root:
@@ -4059,31 +4063,33 @@ def create_backup(file_path):
     shutil.copy2(file_path, backup_path)
     print(f"Backup created for: {file_path} -> {backup_path}")
 
-def create_ini_backup(ini_file):
+def create_ini_backup(ini_file, log):
     backup_file = ini_file.replace('.ini', '.txt')
     shutil.copy2(ini_file, backup_file)
-    print(f"Backup of INI file created: {ini_file} -> {backup_file}")
+    log_message(log, f"Backup of INI file created: {os.path.basename(ini_file)} -> {os.path.basename(backup_file)}")
 
-def process_ini_file(ini_file, blend_files, remaps):
+def process_ini_file(ini_file, blend_files, remaps, fix_41, fix_43, fix_44_47):
     log = []
     try:
         folder_path = os.path.dirname(ini_file)
-        log_message(log, f"Processing INI file: {ini_file}")
+        log_message(log, f"Processing INI file: {os.path.basename(ini_file)}")
 
         with open(ini_file, "r+", encoding="utf-8") as f:
             data = f.read()
             original_data = data
             updated_any = False  
 
-            updated_41 = False
-            for old, new in oldvsnew_41.items():
-                if old in data:
-                    data = data.replace(old, new)
-                    log_message(log, f"\tUpdated 4.1: {old} -> {new}")
-                    updated_41 = True
-            if not updated_41 and any(new in data for _, new in oldvsnew_41.items()):
-                log_message(log, f"\tAlready Updated 4.1")
-                
+            # 4.1 fix
+            if fix_41:
+                updated_41 = False
+                for old, new in oldvsnew_41.items():
+                    if old in data:
+                        data = data.replace(old, new)
+                        log_message(log, f"\tUpdated 4.1: {old} -> {new}")
+                        updated_41 = True
+                if not updated_41 and any(new in data for _, new in oldvsnew_41.items()):
+                    log_message(log, f"\tAlready Updated 4.1")
+            
             # remap fix
             for x, vg_remap in remaps.items():
                 if x in data:
@@ -4102,37 +4108,39 @@ def process_ini_file(ini_file, blend_files, remaps):
                                 remap_data = remap(blend_data, vg_remap[1])
                             with open(blend_file_path, "wb") as g:
                                 g.write(remap_data)
-                                log_message(log, f"File: {blend_file} VGs remapped successfully!")
+                                log_message(log, f"File: {os.path.basename(blend_file)} VGs remapped successfully!")
                         except Exception as e:
-                            log_message(log, f'Error remapping file: {blend_file}')
+                            log_message(log, f'Error remapping file: {os.path.basename(blend_file)}')
                             log_message(log, str(e))
                             continue
 
             # 4.3 fix
-            updated_43 = False
-            for old, new in oldvsnew_43.items():
-                if str(old) in data:
-                    data = data.replace(str(old), new)
-                    log_message(log, f"\tUpdated 4.3: {old} -> {new}")
-                    updated_43 = True
-            if not updated_43 and any(new in data for _, new in oldvsnew_43.items()):
-                log_message(log, f"\tAlready Updated 4.3")
+            if fix_43:
+                updated_43 = False
+                for old, new in oldvsnew_43.items():
+                    if str(old) in data:
+                        data = data.replace(str(old), new)
+                        log_message(log, f"\tUpdated 4.3: {old} -> {new}")
+                        updated_43 = True
+                if not updated_43 and any(new in data for _, new in oldvsnew_43.items()):
+                    log_message(log, f"\tAlready Updated 4.3")
 
             # 4.4 - 4.7 fix
-            updated_44_47 = False
-            for old, new in old_vs_new.items():
-                if old in data:
-                    data = data.replace(old, new)
-                    log_message(log, f'\tUpdated 4.4 - 4.7: {old} -> {new}')
-                    updated_44_47 = True
-            if not updated_44_47 and any(new in data for _, new in old_vs_new.items()):
-                log_message(log, f'\tAlready Updated 4.4 - 4.7')
+            if fix_44_47:
+                updated_44_47 = False
+                for old, new in old_vs_new.items():
+                    if old in data:
+                        data = data.replace(old, new)
+                        log_message(log, f'\tUpdated 4.4 - 4.7: {old} -> {new}')
+                        updated_44_47 = True
+                if not updated_44_47 and any(new in data for _, new in old_vs_new.items()):
+                    log_message(log, f'\tAlready Updated 4.4 - 4.7')
 
             if data != original_data:
-                create_ini_backup(ini_file)  
+                create_ini_backup(ini_file, log) 
                 with open(ini_file, "w", encoding="utf-8") as f:
                     f.write(data)
-                log_message(log, f'File: {ini_file} has been modified!')
+                log_message(log, f'File: {os.path.basename(ini_file)} has been modified!')
                 updated_any = True
             else:
                 log_message(log, f'File: {os.path.basename(ini_file)} had no matches. Skipping')
@@ -4140,11 +4148,11 @@ def process_ini_file(ini_file, blend_files, remaps):
             return updated_any, log  
 
     except Exception as e:
-        log_message(log, f'Error processing file: {ini_file}')
+        log_message(log, f'Error processing file: {os.path.basename(ini_file)}')
         log_message(log, str(e))
         return False, log
 
-def process_folder_43_44(ini_files, remaps, nolog=False):
+def process_folder_43_44(ini_files, remaps, fix_41, fix_43, fix_44_47, nolog=False):
     blend_files = []
     for root, dirs, files in os.walk(os.getcwd()):
         blend_files += [os.path.join(root, file) for file in files if "blend" in file.lower() and ".buf" in file.lower()]
@@ -4154,7 +4162,7 @@ def process_folder_43_44(ini_files, remaps, nolog=False):
     with concurrent.futures.ThreadPoolExecutor() as executor:
         futures = []
         for ini_file in ini_files:
-            futures.append(executor.submit(process_ini_file, ini_file, blend_files, remaps))
+            futures.append(executor.submit(process_ini_file, ini_file, blend_files, remaps, fix_41, fix_43, fix_44_47))
         for future in concurrent.futures.as_completed(futures):
             updated_any, log = future.result()
             logs.append(log)
@@ -4170,13 +4178,27 @@ def process_folder_43_44(ini_files, remaps, nolog=False):
 
 if __name__ == '__main__':
     folder_path = os.getcwd()
-    ini_files = collect_ini_files(folder_path)
-    total_ini_files = len(ini_files)
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--force_remap', action='store_true', default=False)
     parser.add_argument('--nolog', action='store_true', default=False)
+    parser.add_argument('--disablefile', '-df', action='store_true', help='Remove "disabled" from the exclusion list.')
+    parser.add_argument('-41', action='store_true', help='Run only the 4.1 fixes.')
+    parser.add_argument('--43', action='store_true', help='Run only the 4.3 fixes.')
+    parser.add_argument('-44', action='store_true', help='Run only the 4.4-4.7 fixes.')
     args = parser.parse_args()
+
+    fix_41 = args.__dict__['41']
+    fix_43 = args.__dict__['43']
+    fix_44_47 = args.__dict__['44']
+
+    if not (fix_41 or fix_43 or fix_44_47):
+        fix_41 = True
+        fix_43 = True
+        fix_44_47 = True
+
+    ini_files = collect_ini_files(folder_path, args.disablefile)
+    total_ini_files = len(ini_files)
 
     start_time = time.time()
 
@@ -4185,7 +4207,7 @@ if __name__ == '__main__':
     if args.force_remap:
         force_remap(folder_path)
     else:
-        processed_files_count = process_folder_43_44(ini_files, remaps, nolog=args.nolog)
+        processed_files_count = process_folder_43_44(ini_files, remaps, fix_41, fix_43, fix_44_47, nolog=args.nolog)
 
     end_time = time.time()
     elapsed_time = end_time - start_time
