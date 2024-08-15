@@ -7,10 +7,8 @@
 
 import os
 import bpy
-from bpy.props import PointerProperty, StringProperty, EnumProperty, CollectionProperty, BoolProperty
+from bpy.props import PointerProperty, StringProperty, EnumProperty, BoolProperty
 from bpy.types import Object, Operator, Panel, PropertyGroup
-from bpy_extras.io_utils import unpack_list, ImportHelper, ExportHelper, axis_conversion
-from bpy.utils import register_class, unregister_class
 import numpy as np
 import re
 import importlib
@@ -19,11 +17,11 @@ if bpy.app.version < (4, 2, 0):
     from blender_dds_addon import import_dds
 
 current_directory = os.path.dirname(os.path.realpath(__file__))
-pattern = r'XXMI-Tools'
+pattern = r'XXMI[-_]?Tools'
 matching_directory = None
 for root, dirs, files in os.walk(current_directory):
     for directory in dirs:
-        if re.search(pattern, directory):
+        if re.search(pattern, directory, re.IGNORECASE):
             matching_directory = os.path.join(root, directory)
             break
     if matching_directory:
