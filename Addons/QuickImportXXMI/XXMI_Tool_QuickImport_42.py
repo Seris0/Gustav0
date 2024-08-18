@@ -47,6 +47,7 @@ bl_info = {
     "blender": (3, 6, 2),
     "description": "Script Compilation",
     "category": "Object",
+    "tracker_url": "https://github.com/Seris0/Gustav0/tree/main/Addons/QuickImportXXMI",
 }
 
 
@@ -144,36 +145,34 @@ class OBJECT_OT_transfer_properties(bpy.types.Operator):
                 prefix = base_obj.name.split("-")[0]
                 base_prefix_dict[prefix] = base_obj
 
-            transferred = []
             for target_obj in target_collection.objects:
                 target_prefix = target_obj.name.split("-")[0]
                 if target_prefix in base_prefix_dict:
                     base_obj = base_prefix_dict[target_prefix]
 
-                  
+
                     for key in list(target_obj.keys()):
                         if key not in '_RNA_UI':  
                             del target_obj[key]
 
-                   
+
                     for key in base_obj.keys():
                         target_obj[key] = base_obj[key]
                     target_obj.location = base_obj.location
                     target_obj.rotation_euler = base_obj.rotation_euler
                     target_obj.scale = base_obj.scale  
 
-                    print(f"Transferred properties from '{base_obj.name}' to '{target_obj.name}':")
-                    print(f"  Location: {target_obj.location}")
-                    print(f"  Rotation: {target_obj.rotation_euler}")
-                    print(f"  Scale: {target_obj.scale}")
-                    transferred.append(target_obj.name)
 
-            if not transferred:
-                self.report({'INFO'}, 
-                    "No matching prefixes found in the target collection.\n"
-                    "Ensure that the object names in the target collection have the same prefixes as those in the base collection.")
-            else:
-                self.report({'INFO'}, f"Properties transferred to: {', '.join(transferred)}")
+                    log_message = (
+                        f"Transferred properties from '{base_obj.name}' to '{target_obj.name}':\n"
+                        f"  Location: {target_obj.location}\n"
+                        f"  Rotation: {target_obj.rotation_euler}\n"
+                        f"  Scale: {target_obj.scale}"
+                    )
+                    print(log_message)
+                    self.report({'INFO'}, log_message)
+
+            self.report({'INFO'}, "Transfer completed for matching objects in the collections.")
 
         else:
             base_obj = context.scene.base_objectproperties
@@ -185,12 +184,10 @@ class OBJECT_OT_transfer_properties(bpy.types.Operator):
                     "Please ensure you have selected valid objects for both 'Original Mesh' and 'Modded Mesh' in the panel.")
                 return {'CANCELLED'}
 
-          
             for key in list(target_obj.keys()):
                 if key not in '_RNA_UI': 
                     del target_obj[key]
 
-           
             for key in base_obj.keys():
                 target_obj[key] = base_obj[key]
 
@@ -198,10 +195,14 @@ class OBJECT_OT_transfer_properties(bpy.types.Operator):
             target_obj.rotation_euler = base_obj.rotation_euler
             target_obj.scale = base_obj.scale  
 
-            print(f"Transferred properties from '{base_obj.name}' to '{target_obj.name}':")
-            print(f"  Location: {target_obj.location}")
-            print(f"  Rotation: {target_obj.rotation_euler}")
-            print(f"  Scale: {target_obj.scale}")
+            log_message = (
+                f"Transferred properties from '{base_obj.name}' to '{target_obj.name}':\n"
+                f"  Location: {target_obj.location}\n"
+                f"  Rotation: {target_obj.rotation_euler}\n"
+                f"  Scale: {target_obj.scale}"
+            )
+            print(log_message)
+            self.report({'INFO'}, log_message)
 
         return {'FINISHED'}
              
