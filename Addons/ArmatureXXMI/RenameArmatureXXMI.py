@@ -548,10 +548,10 @@ class CleanArmatureOperator(bpy.types.Operator):
 
             print(f"Vertex groups: {vertex_group_names}")
 
-            prefixes_to_exclude = ("Shoulder", "Scapula", "Knee", "Elbow", "UpperArm", "Clavicle")
+            prefixes_to_exclude = ("Shoulder", "Scapula", "Knee", "Elbow", "UpperArm", "Clavicle", "Calf")
             bones_to_delete = [
                 bone for bone in armature.edit_bones
-                if bone.name not in vertex_group_names and not any(prefix in bone.name for prefix in prefixes_to_exclude)
+                if bone.name not in vertex_group_names and not any(prefix.lower() in bone.name.lower() for prefix in prefixes_to_exclude)
             ]
             print(f"Bones to delete: {[bone.name for bone in bones_to_delete]}")
 
