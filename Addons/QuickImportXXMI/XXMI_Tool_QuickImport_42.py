@@ -12,6 +12,7 @@ from bpy.types import Object, Operator, Panel, PropertyGroup
 import numpy as np
 import re
 import importlib
+import glob
  
 if bpy.app.version < (4, 2, 0):
     from blender_dds_addon import import_dds
@@ -61,46 +62,41 @@ class GIMI_TOOLS_PT_main_panel(bpy.types.Panel):
     def draw(self, context):
         layout = self.layout
 
-       
+        # Main Tools Section
         box = layout.box()
-        box.prop(context.scene, "show_vertex", icon="TRIA_DOWN" if context.scene.show_vertex else "TRIA_RIGHT", emboss=False, text="Main Tools")
+        row = box.row()
+        row.prop(context.scene, "show_vertex", icon="TRIA_DOWN" if context.scene.show_vertex else "TRIA_RIGHT", emboss=False, text="Main Tools")
         if context.scene.show_vertex:
-         
-            box.label(text="Vertex Groups", icon='GROUP_VERTEX')
-            row = box.row()
-            row.prop(context.scene, "Largest_VG", text="Largest VG")
-            row = box.row()
-            row.operator("GIMI_TOOLS.fill_vgs", text="Fill Vertex Groups", icon='ADD')
-            row = box.row()
-            row.operator("GIMI_TOOLS.remove_unused_vgs", text="Remove Unused VG's", icon='X')
-            row = box.row()
-            row.operator("GIMI_TOOLS.remove_all_vgs", text="Remove All VG's", icon='CANCEL')
-            row = box.row()
-            row.operator("object.separate_by_material_and_rename", text="Separate by Material", icon='MATERIAL')
-            row = box.row()
+            col = box.column(align=True)
+            col.label(text="Vertex Groups", icon='GROUP_VERTEX')
+            col.prop(context.scene, "Largest_VG", text="Largest VG")
+            col.operator("GIMI_TOOLS.fill_vgs", text="Fill Vertex Groups", icon='ADD')
+            col.operator("GIMI_TOOLS.remove_unused_vgs", text="Remove Unused VG's", icon='X')
+            col.operator("GIMI_TOOLS.remove_all_vgs", text="Remove All VG's", icon='CANCEL')
+            col.operator("object.separate_by_material_and_rename", text="Separate by Material", icon='MATERIAL')
 
-            # Vertex Group Merge Section
-            layout.prop(context.scene, "merge_mode", text="Merge Mode")
+            col.separator()
+            col.label(text="Merge Vertex Groups", icon='AUTOMERGE_ON')
+            col.prop(context.scene, "merge_mode", text="")
             if context.scene.merge_mode == 'MODE1':
-                layout.prop(context.scene, "vertex_groups", text="Vertex Groups")
+                col.prop(context.scene, "vertex_groups", text="Vertex Groups")
             elif context.scene.merge_mode == 'MODE2':
-                layout.prop(context.scene, "smallest_group_number", text="Smallest Group")
-                layout.prop(context.scene, "largest_group_number", text="Largest Group")
-            layout.operator("object.merge_vertex_groups", text="Merge Vertex")
-        
-    
-        box = layout.box()
-        box.prop(context.scene, "show_remap", icon="TRIA_DOWN" if context.scene.show_remap else "TRIA_RIGHT", emboss=False, text="Vertex Group REMAP")
-        if context.scene.show_remap:
-            box.label(text="Vertex Group REMAP", icon='FILE_REFRESH')  
-            row = box.row()
-            row.prop_search(context.scene, "vgm_source_object", bpy.data, "objects", text="Source")
-            row = box.row()
-            row.prop_search(context.scene, "vgm_destination_object", bpy.data, "objects", text="Target")
-            row = box.row()
-            row.operator("object.vertex_group_remap", text="Run Remap", icon='FILE_REFRESH')  
+                row = col.row(align=True)
+                row.prop(context.scene, "smallest_group_number", text="From")
+                row.prop(context.scene, "largest_group_number", text="To")
+            col.operator("object.merge_vertex_groups", text="Merge Vertex Groups")
 
-        # Collapsible Transfer Properties Section
+        # Vertex Group REMAP Section
+        box = layout.box()
+        row = box.row()
+        row.prop(context.scene, "show_remap", icon="TRIA_DOWN" if context.scene.show_remap else "TRIA_RIGHT", emboss=False, text="Vertex Group REMAP")
+        if context.scene.show_remap:
+            col = box.column(align=True)
+            col.prop_search(context.scene, "vgm_source_object", bpy.data, "objects", text="Source")
+            col.prop_search(context.scene, "vgm_destination_object", bpy.data, "objects", text="Target")
+            col.operator("object.vertex_group_remap", text="Run Remap", icon='FILE_REFRESH')
+
+        # Transfer Properties Section
         box = layout.box()
         box.prop(context.scene, "show_transfer", icon="TRIA_DOWN" if context.scene.show_transfer else "TRIA_RIGHT", emboss=False, text="Transfer Properties")
         if context.scene.show_transfer:
@@ -118,7 +114,7 @@ class GIMI_TOOLS_PT_main_panel(bpy.types.Panel):
                 row = box.row()
                 row.prop_search(context.scene, "target_objectproperties", bpy.data, "objects", text="Modded Mesh:")
             row = box.row()
-            row.operator("object.transfer_properties", text="Transfer Properties", icon='OUTLINER_OB_GROUP_INSTANCE')  
+            row.operator("object.transfer_properties", text="Transfer Properties", icon='OUTLINER_OB_GROUP_INSTANCE')
 
 
 
@@ -573,16 +569,22 @@ class GIMI_TOOLS_PT_quick_import_panel(bpy.types.Panel):
         layout = self.layout
         cfg = context.scene.quick_import_settings
 
-        row = layout.row()
-        row.operator("import_scene.3dmigoto_frame_analysis", text="Setup Character", icon='IMPORT')
+        box = layout.box()
+        col = box.column(align=True)
+        col.operator("import_scene.3dmigoto_frame_analysis", text="Setup Character", icon='IMPORT')
+        
+        col.separator()
+        col.label(text="Import Options:", icon='SETTINGS')
+        row = col.row(align=True)
+        row.prop(cfg, "import_textures", toggle=True)
+        row.prop(cfg, "merge_by_distance", toggle=True)
+        
+        row = col.row(align=True)
+        row.prop(cfg, "reset_rotation", toggle=True)
+        row.prop(cfg, "tri_to_quads", toggle=True)
+        
+        col.prop(cfg, "create_collection", toggle=True)
 
-        layout.prop(cfg, "tri_to_quads")
-        layout.prop(cfg, "merge_by_distance")
-        layout.prop(cfg, "reset_rotation")
-
-        row = layout.row(align=True)
-        row.prop(cfg, "import_textures")
-        row.prop(cfg, "create_collection")
 
 class QuickImport(Import3DMigotoFrameAnalysis):
     bl_idname = "import_scene.3dmigoto_frame_analysis"
@@ -590,11 +592,21 @@ class QuickImport(Import3DMigotoFrameAnalysis):
     bl_options = {"UNDO"}
 
     def execute(self, context):
-        super().execute(context)
         folder = os.path.dirname(self.properties.filepath)
         print("------------------------")
-
         print(f"Found Folder: {folder}")
+
+        # If no files are selected, find all .txt files in the folder
+        if not self.files:
+            txt_files = glob.glob(os.path.join(folder, '*.txt'))
+            self.files.clear()
+            for txt_file in txt_files:
+                file_elem = self.files.add()
+                file_elem.name = os.path.basename(txt_file)
+
+        # Call the parent class's execute method
+        super().execute(context)
+
         files = os.listdir(folder)
         files = [f for f in files if f.endswith("Diffuse.dds")]
         print(f"List of files: {files}")
@@ -611,7 +623,6 @@ class QuickImport(Import3DMigotoFrameAnalysis):
             new_collection = bpy.data.collections.new(collection_name)
             bpy.context.scene.collection.children.link(new_collection)
 
-
             for obj in bpy.context.selected_objects:
                 if obj.name.startswith(collection_name):
                     bpy.context.scene.collection.objects.unlink(obj)
@@ -625,26 +636,30 @@ class QuickImport(Import3DMigotoFrameAnalysis):
             for obj in context.selected_objects:
                 obj.rotation_euler = (0, 0, 0)
 
-        if context.scene.quick_import_settings.tri_to_quads:
-            bpy.ops.object.mode_set(mode='EDIT')          
-            bpy.ops.mesh.select_all(action='SELECT') 
-            bpy.ops.mesh.tris_convert_to_quads(uvs=True, vcols=True, seam=True, sharp=True, materials=True)
-            bpy.ops.mesh.delete_loose()
+        # Check if there are any objects selected before performing mesh operations
+        if bpy.context.selected_objects:
+            if context.scene.quick_import_settings.tri_to_quads:
+                bpy.ops.object.mode_set(mode='EDIT')          
+                bpy.ops.mesh.select_all(action='SELECT') 
+                bpy.ops.mesh.tris_convert_to_quads(uvs=True, vcols=True, seam=True, sharp=True, materials=True)
+                bpy.ops.mesh.delete_loose()
+                bpy.ops.object.mode_set(mode='OBJECT')
             
-        if context.scene.quick_import_settings.merge_by_distance:
-            bpy.ops.object.mode_set(mode='EDIT')          
-            bpy.ops.mesh.select_all(action='SELECT') 
-            bpy.ops.mesh.remove_doubles(use_sharp_edge_from_normals=True)   
-            bpy.ops.mesh.delete_loose()
+            if context.scene.quick_import_settings.merge_by_distance:
+                bpy.ops.object.mode_set(mode='EDIT')          
+                bpy.ops.mesh.select_all(action='SELECT') 
+                bpy.ops.mesh.remove_doubles(use_sharp_edge_from_normals=True)   
+                bpy.ops.mesh.delete_loose()
+                bpy.ops.object.mode_set(mode='OBJECT')
             
-        if context.scene.quick_import_settings.import_textures:
-            bpy.ops.object.mode_set(mode='EDIT')          
-            bpy.ops.mesh.select_all(action='SELECT')
-            bpy.ops.mesh.delete_loose()
-            bpy.ops.object.mode_set(mode='OBJECT')
-            for area in context.screen.areas:
-                if area.type == 'VIEW_3D':
-                    area.spaces.active.shading.type = 'MATERIAL'
+            if context.scene.quick_import_settings.import_textures:
+                bpy.ops.object.mode_set(mode='EDIT')          
+                bpy.ops.mesh.select_all(action='SELECT')
+                bpy.ops.mesh.delete_loose()
+                bpy.ops.object.mode_set(mode='OBJECT')
+                for area in context.screen.areas:
+                    if area.type == 'VIEW_3D':
+                        area.spaces.active.shading.type = 'MATERIAL'
 
         return {"FINISHED"}
     
