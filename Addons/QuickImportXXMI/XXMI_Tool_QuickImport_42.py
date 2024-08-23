@@ -12,7 +12,6 @@ from bpy.types import Object, Operator, Panel, PropertyGroup
 import numpy as np
 import re
 import importlib
-import glob
  
 if bpy.app.version < (4, 2, 0):
     from blender_dds_addon import import_dds
@@ -585,28 +584,17 @@ class GIMI_TOOLS_PT_quick_import_panel(bpy.types.Panel):
         
         col.prop(cfg, "create_collection", toggle=True)
 
-
 class QuickImport(Import3DMigotoFrameAnalysis):
     bl_idname = "import_scene.3dmigoto_frame_analysis"
     bl_label = "Quick Import for XXMI"
     bl_options = {"UNDO"}
 
     def execute(self, context):
+        super().execute(context)
         folder = os.path.dirname(self.properties.filepath)
         print("------------------------")
+
         print(f"Found Folder: {folder}")
-
-        # If no files are selected, find all .txt files in the folder
-        if not self.files:
-            txt_files = glob.glob(os.path.join(folder, '*.txt'))
-            self.files.clear()
-            for txt_file in txt_files:
-                file_elem = self.files.add()
-                file_elem.name = os.path.basename(txt_file)
-
-        # Call the parent class's execute method
-        super().execute(context)
-
         files = os.listdir(folder)
         files = [f for f in files if f.endswith("Diffuse.dds")]
         print(f"List of files: {files}")
@@ -623,6 +611,7 @@ class QuickImport(Import3DMigotoFrameAnalysis):
             new_collection = bpy.data.collections.new(collection_name)
             bpy.context.scene.collection.children.link(new_collection)
 
+
             for obj in bpy.context.selected_objects:
                 if obj.name.startswith(collection_name):
                     bpy.context.scene.collection.objects.unlink(obj)
@@ -636,30 +625,26 @@ class QuickImport(Import3DMigotoFrameAnalysis):
             for obj in context.selected_objects:
                 obj.rotation_euler = (0, 0, 0)
 
-        # Check if there are any objects selected before performing mesh operations
-        if bpy.context.selected_objects:
-            if context.scene.quick_import_settings.tri_to_quads:
-                bpy.ops.object.mode_set(mode='EDIT')          
-                bpy.ops.mesh.select_all(action='SELECT') 
-                bpy.ops.mesh.tris_convert_to_quads(uvs=True, vcols=True, seam=True, sharp=True, materials=True)
-                bpy.ops.mesh.delete_loose()
-                bpy.ops.object.mode_set(mode='OBJECT')
+        if context.scene.quick_import_settings.tri_to_quads:
+            bpy.ops.object.mode_set(mode='EDIT')          
+            bpy.ops.mesh.select_all(action='SELECT') 
+            bpy.ops.mesh.tris_convert_to_quads(uvs=True, vcols=True, seam=True, sharp=True, materials=True)
+            bpy.ops.mesh.delete_loose()
             
-            if context.scene.quick_import_settings.merge_by_distance:
-                bpy.ops.object.mode_set(mode='EDIT')          
-                bpy.ops.mesh.select_all(action='SELECT') 
-                bpy.ops.mesh.remove_doubles(use_sharp_edge_from_normals=True)   
-                bpy.ops.mesh.delete_loose()
-                bpy.ops.object.mode_set(mode='OBJECT')
+        if context.scene.quick_import_settings.merge_by_distance:
+            bpy.ops.object.mode_set(mode='EDIT')          
+            bpy.ops.mesh.select_all(action='SELECT') 
+            bpy.ops.mesh.remove_doubles(use_sharp_edge_from_normals=True)   
+            bpy.ops.mesh.delete_loose()
             
-            if context.scene.quick_import_settings.import_textures:
-                bpy.ops.object.mode_set(mode='EDIT')          
-                bpy.ops.mesh.select_all(action='SELECT')
-                bpy.ops.mesh.delete_loose()
-                bpy.ops.object.mode_set(mode='OBJECT')
-                for area in context.screen.areas:
-                    if area.type == 'VIEW_3D':
-                        area.spaces.active.shading.type = 'MATERIAL'
+        if context.scene.quick_import_settings.import_textures:
+            bpy.ops.object.mode_set(mode='EDIT')          
+            bpy.ops.mesh.select_all(action='SELECT')
+            bpy.ops.mesh.delete_loose()
+            bpy.ops.object.mode_set(mode='OBJECT')
+            for area in context.screen.areas:
+                if area.type == 'VIEW_3D':
+                    area.spaces.active.shading.type = 'MATERIAL'
 
         return {"FINISHED"}
     
