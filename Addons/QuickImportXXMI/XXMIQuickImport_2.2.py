@@ -43,7 +43,7 @@ except AttributeError as e:
 bl_info = {
     "name": "XXMI Scripts & Quick Import",
     "author": "Gustav0, LeoTorreZ",
-    "version": (2, 0),
+    "version": (2, 2),
     "blender": (3, 6, 2),
     "description": "Script Compilation",
     "category": "Object",
