@@ -1,4 +1,4 @@
-# 3DMigoto SRMI Loader Documentation
+# 3DMigoto XXMI Python Loader Documentation
 
 This document outlines the main functions of the 3DMigoto SRMI Loader script.
 
