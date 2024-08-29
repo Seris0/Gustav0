@@ -16,29 +16,36 @@ import importlib
 if bpy.app.version < (4, 2, 0):
     from blender_dds_addon import import_dds
 
-current_directory = os.path.dirname(os.path.realpath(__file__))
-pattern = r'XXMI[-_]?Tools'
-matching_directory = None
-for root, dirs, files in os.walk(current_directory):
-    for directory in dirs:
-        if re.search(pattern, directory, re.IGNORECASE):
-            matching_directory = os.path.join(root, directory)
-            break
-    if matching_directory:
-        break
+def find_and_import_xxmi_tools():
+    current_directory = os.path.dirname(os.path.realpath(__file__))
+    pattern = r'XXMI[-_]?Tools'
 
-if matching_directory is None:
-    raise ImportError("No Module.")
+    def find_matching_directory(root_dir):
+        for root, dirs, _ in os.walk(root_dir):
+            for directory in dirs:
+                if re.search(pattern, directory, re.IGNORECASE):
+                    return os.path.join(root, directory)
+        return None
 
-relative_path = os.path.relpath(matching_directory, current_directory)
-module_name = relative_path.replace(os.path.sep, '.').replace('.py', '') + ".migoto.operators"
-try:
-    module = importlib.import_module(module_name)
-    Import3DMigotoFrameAnalysis = getattr(module, 'Import3DMigotoFrameAnalysis')
-except ImportError as e:
-    print(f"Error Import module: {e}")
-except AttributeError as e:
-    print(f"Error'Import3DMigotoFrameAnalysis': {e}")
+    matching_directory = find_matching_directory(current_directory)
+
+    if matching_directory is None:
+        raise ImportError("XXMI Tools module not found.")
+
+    relative_path = os.path.relpath(matching_directory, current_directory)
+    module_name = relative_path.replace(os.path.sep, '.').replace('.py', '') + ".migoto.operators"
+
+    try:
+        module = importlib.import_module(module_name)
+        return getattr(module, 'Import3DMigotoFrameAnalysis')
+    except ImportError as e:
+        print(f"Error importing module: {e}")
+    except AttributeError as e:
+        print(f"Error finding 'Import3DMigotoFrameAnalysis': {e}")
+    
+    return None
+
+Import3DMigotoFrameAnalysis = find_and_import_xxmi_tools()
 
 bl_info = {
     "name": "XXMI Scripts & Quick Import",

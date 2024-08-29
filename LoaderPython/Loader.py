@@ -5,117 +5,101 @@ import psutil
 from pyinjector import inject
 import subprocess
 
-def is_admin():
+def check_admin():
     try:
         return ctypes.windll.shell32.IsUserAnAdmin()
     except:
         return False
 
-def read_ini_commands(ini_path, command_prefix):
-    if not os.path.exists(ini_path):
-        print(f"Error: INI file path {ini_path} does not exist.")
+def parse_ini_settings(config_path, setting_key):
+    if not os.path.exists(config_path):
+        print(f"Error: Configuration file {config_path} not found.")
         return []
 
-    commands = []
-    with open(ini_path, 'r') as file:
+    settings = []
+    with open(config_path, 'r') as file:
         for line in file:
-            if line.strip().startswith(command_prefix):
-                command = line.strip().split('=', 1)[1].strip()
-                if os.path.exists(command):
-                    commands.append(command)
+            if line.strip().startswith(setting_key):
+                value = line.strip().split('=', 1)[1].strip()
+                if os.path.exists(value):
+                    settings.append(value)
                 else:
-                    current_dir = os.path.dirname(ini_path)
-                    full_path = os.path.join(current_dir, command)
+                    base_dir = os.path.dirname(config_path)
+                    full_path = os.path.join(base_dir, value)
                     if os.path.exists(full_path):
-                        commands.append(full_path)
+                        settings.append(full_path)
                     else:
-                        commands.append(command)
-    return commands
-
-def read_ini_launch_args(ini_path, command_prefix):
-    if not os.path.exists(ini_path):
-        print(f"Error: INI file path {ini_path} does not exist.")
-        return ""
-
-    launch_args = ""
-    with open(ini_path, 'r') as file:
-        for line in file:
-            if line.strip().startswith(command_prefix):
-                launch_args = line.strip().split('=', 1)[1].strip()
-                break
-    return launch_args
+                        settings.append(value)
+    return settings
 
 def main():
     print("------------------------------- 3DMigoto SRMI Loader ------------------------------\n")
-    current_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
-    print(f"Current directory: {current_dir}")
+    base_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
+    print(f"Working directory: {base_dir}")
     
-    migoto_dll_path = os.path.join(current_dir, "d3d11.dll")
-    ini_path = os.path.join(current_dir, "d3dx.ini")
+    migoto_lib_path = os.path.join(base_dir, "d3d11.dll")
+    config_path = os.path.join(base_dir, "d3dx.ini")
     
-    launch_commands = read_ini_commands(ini_path, "launch")
-    launch_args = read_ini_launch_args(ini_path, "Launch_args")
-    
-    for launch_command in launch_commands:
-        command_with_args = f"{launch_command} {launch_args}"
-        print(f"Launching executable specified in INI file: {command_with_args}")
+    startup_commands = parse_ini_settings(config_path, "launch")
+    for cmd in startup_commands:
+        print(f"Executing startup command: {cmd}")
         try:
-            subprocess.Popen(command_with_args)
+            subprocess.Popen(cmd)
         except Exception as e:
-            print(f"Failed to launch executable: {e}")
+            print(f"Command execution failed: {e}")
             continue  
 
-    if not os.path.exists(migoto_dll_path):
-        print(f"Error: 3DMigoto DLL path {migoto_dll_path} does not exist.")
+    if not os.path.exists(migoto_lib_path):
+        print(f"Error: 3DMigoto library {migoto_lib_path} not found.")
     else:
-        print(f"Loaded: {migoto_dll_path}")
+        print(f"Located: {migoto_lib_path}")
 
-    proxy_dll_paths = read_ini_commands(ini_path, "proxy")
-    for proxy_dll_path in proxy_dll_paths:
-        proxy_dll_path = os.path.abspath(proxy_dll_path)
-        if not os.path.exists(proxy_dll_path):
-            print(f"Error: Proxy DLL path {proxy_dll_path} does not exist.")
+    additional_libs = parse_ini_settings(config_path, "proxy")
+    for lib_path in additional_libs:
+        lib_path = os.path.abspath(lib_path)
+        if not os.path.exists(lib_path):
+            print(f"Error: Additional library {lib_path} not found.")
         else:
-            print(f"Loaded: {proxy_dll_path}")
+            print(f"Located: {lib_path}")
 
-    target_executables = read_ini_commands(ini_path, "target")
-    if not target_executables:
-        print("Error: No target executable specified in the INI file.")
+    target_apps = parse_ini_settings(config_path, "target")
+    if not target_apps:
+        print("Error: No target application specified in the configuration.")
     else:
-        for target_exe in target_executables:
-            print(f"Target executable found: {target_exe}\n")
+        for app in target_apps:
+            print(f"Target application: {app}\n")
 
-    print("Note: This window may close automatically once the game starts.\n")
-    print("3DMigoto Read - Please start the game now.")
+    print("Note: This window may close automatically when the application starts.\n")
+    print("3DMigoto Ready - Please launch the application now.")
     
     while True:
         for proc in psutil.process_iter(['name', 'pid']):
             try:
-                for target_exe in target_executables:
-                    if proc.info['name'] == os.path.basename(target_exe) or proc.info['name'] == target_exe:
-                        print(f"Game found: {proc.info['name']} with PID {proc.info['pid']}")
+                for app in target_apps:
+                    if proc.info['name'] == os.path.basename(app) or proc.info['name'] == app:
+                        print(f"Application detected: {proc.info['name']} (PID: {proc.info['pid']})")
                         try:
-                            inject(proc.info['pid'], migoto_dll_path)
-                            print("3DMigoto DLL injection successful.")
+                            inject(proc.info['pid'], migoto_lib_path)
+                            print("3DMigoto library injection successful.")
                             
-                            for proxy_dll_path in proxy_dll_paths:
-                                if os.path.exists(proxy_dll_path):
+                            for lib_path in additional_libs:
+                                if os.path.exists(lib_path):
                                     try:
-                                        inject(proc.info['pid'], proxy_dll_path)
-                                        print(f"Proxy DLL injection successful: {proxy_dll_path}")
+                                        inject(proc.info['pid'], lib_path)
+                                        print(f"Additional library injection successful: {lib_path}")
                                     except Exception as e:
-                                        print(f"Failed to inject proxy DLL {proxy_dll_path}: {e}")
+                                        print(f"Failed to inject additional library {lib_path}: {e}")
                             
                             return
                         except Exception as e:
-                            print(f"Failed to inject DLL: {e}")
-                            print("Retrying injection in 1 second...")
+                            print(f"Library injection failed: {e}")
+                            print("Retrying injection shortly...")
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                 pass
 
 if __name__ == "__main__":
-    if not is_admin():
-        print("Please run this program as an administrator.")
+    if not check_admin():
+        print("Please run this program with administrative privileges.")
         input()
         sys.exit()
     
