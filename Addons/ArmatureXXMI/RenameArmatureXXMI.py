@@ -189,7 +189,7 @@ def process_base_collection(collection, mode, ignore_hair, ignore_head, armature
         print("Ignoring head meshes...")
         base_objs = [obj for obj in base_objs if 'head' not in obj.name.lower()]
 
-    if mode in ['HONKAI', 'ZENLESS']:
+    if mode in ['HONKAI']:
         if armature_mode in ['MERGED', 'PER_COMPONENT']:
             body_meshes = [obj for obj in base_objs if 'body' in obj.name.lower()]
             other_meshes = [obj for obj in base_objs if 'body' not in obj.name.lower()]
@@ -213,16 +213,7 @@ def process_base_collection(collection, mode, ignore_hair, ignore_head, armature
                 if not obj.name.startswith(mesh_name + "_"):
                     obj.name = f"{mesh_name}_{obj.name}"
 
-        # elif armature_mode == 'PER_COMPONENT':
-        #     for obj in base_objs:
-        #         mesh_name = obj.name.split('-')[0]
-        #         for vg in obj.vertex_groups:
-        #             if not vg.name.startswith(mesh_name + "_"):
-        #                 vg.name = f"{mesh_name}_{vg.name}"
-        #         if not obj.name.startswith(mesh_name + "_"):
-        #             obj.name = f"{mesh_name}_{obj.name}"
-
-    elif mode in ['GENSHIN', 'WUWA']:
+    elif mode in ['GENSHIN', 'WUWA', 'ZENLESS']:
         if armature_mode == 'MERGED':
             bpy.ops.object.select_all(action='DESELECT')
             for obj in base_objs:
@@ -237,8 +228,9 @@ def process_base_collection(collection, mode, ignore_hair, ignore_head, armature
                 for vg in obj.vertex_groups:
                     if not vg.name.startswith(mesh_name + "_"):
                         vg.name = f"{mesh_name}_{vg.name}"
-                if not obj.name.startswith(mesh_name + "_"):
-                    obj.name = f"{mesh_name}_{obj.name}"
+                # Remove the following line to prevent double renaming
+                # if not obj.name.startswith(mesh_name + "_"):
+                #     obj.name = f"{mesh_name}_{obj.name}"
 
     bpy.ops.object.select_all(action='DESELECT')
     for obj in base_objs:
@@ -252,7 +244,6 @@ def process_base_collection(collection, mode, ignore_hair, ignore_head, armature
         return joined_obj
     else:
         return None
-    
 def calculate_vertex_influence_area(obj):
     vertex_area = np.zeros(len(obj.data.vertices))
     
@@ -457,13 +448,13 @@ class SetupCharacterForArmatureOperator(Operator):
                             print(f"Error joining objects: {e}")
                         except Exception as e:
                             print(f"Unexpected error joining objects: {e}")
-                elif mode == 'WUWA':
+                elif mode in {'WUWA', 'ZENLESS'}:
                     pass
                 else:
                     body_meshes = [obj for obj in base_objs if 'body' in obj.name.lower()]
                     other_meshes = [obj for obj in base_objs if 'body' not in obj.name.lower()]
 
-                    if body_meshes and mode in { 'ZENLESS'}:
+                    if body_meshes:
                         bpy.ops.object.select_all(action='DESELECT')
                         for obj in body_meshes:
                             if obj and obj.name in bpy.data.objects:
@@ -489,7 +480,7 @@ class SetupCharacterForArmatureOperator(Operator):
                             if not vg.name.startswith(f"{base_obj_name}_"):
                                 vg.name = f"{base_obj_name}_{vg.name}"
 
-            elif mode != 'GENSHIN' and mode != 'WUWA':
+            elif mode not in {'GENSHIN', 'WUWA', 'ZENLESS'}:
                 for obj in base_objs:
                     if obj and obj.name in bpy.data.objects:
                         base_obj_name = obj.name.split('-')[0]
@@ -498,7 +489,7 @@ class SetupCharacterForArmatureOperator(Operator):
                                 if not vg.name.startswith(f"{base_obj_name}_"):
                                     vg.name = f"{base_obj_name}_{vg.name}"
 
-            if not join_performed and mode not in {'WUWA', 'HONKAI'}: 
+            if not join_performed and mode not in {'WUWA', 'ZENLESS', 'HONKAI'}: 
                 bpy.ops.object.select_all(action='DESELECT')
                 for obj in base_objs:
                     if obj and obj.name in bpy.data.objects:
@@ -548,7 +539,7 @@ class CleanArmatureOperator(bpy.types.Operator):
 
             print(f"Vertex groups: {vertex_group_names}")
 
-            prefixes_to_exclude = ("Shoulder", "Scapula", "Knee", "Elbow", "UpperArm", "Clavicle", "Calf")
+            prefixes_to_exclude = ("Shoulder", "Scapula", "Knee", "Elbow", "UpperArm", "Clavicle", "Calf", "Forearm")
             bones_to_delete = [
                 bone for bone in armature.edit_bones
                 if bone.name not in vertex_group_names and not any(prefix.lower() in bone.name.lower() for prefix in prefixes_to_exclude)
@@ -746,6 +737,32 @@ class ResetVertexGroupsNamesOperator(Operator):
 
         self.report({'INFO'}, "Vertex groups names reset successfully.")
         return {'FINISHED'}
+
+class ResetPrefix(Operator):
+    """Reset Vertex Groups Names by removing mesh name prefix"""
+    bl_idname = "object.reset_prefix"
+    bl_label = "Reset Vertex Groups Prefix"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        props = context.scene.armature_matching_props
+        base_collection = props.base_collection
+
+        if not base_collection:
+            self.report({'ERROR'}, "Base collection not found.")
+            return {'CANCELLED'}
+
+        base_objs = [obj for obj in base_collection.objects if obj.type == 'MESH']
+
+        for obj in base_objs:
+            mesh_name = obj.name.split('-')[0]  
+            for vg in obj.vertex_groups:
+                if vg.name.startswith(mesh_name):
+                    new_name = vg.name[len(mesh_name):].lstrip('_')
+                    vg.name = new_name
+
+        self.report({'INFO'}, "Vertex groups prefixes reset successfully.")
+        return {'FINISHED'}
     
 #MARK: PANEL   
 class ArmatureXXMIPanel(Panel):
@@ -787,6 +804,7 @@ class ArmatureXXMIPanel(Panel):
         layout.operator("object.setup_character_for_armature", icon='OUTLINER_OB_MESH')
         layout.operator("object.split_mesh_by_vertex_groups", icon='GROUP_VERTEX')
         layout.operator("object.reset_vertex_groups_names", icon='OUTLINER_OB_GREASEPENCIL')
+        layout.operator("object.reset_prefix", icon='X')
 
 
 classes = [
@@ -799,6 +817,7 @@ classes = [
     SplitMeshByVertexGroupsOperator,
     ArmatureXXMIPanel,
     ResetVertexGroupsNamesOperator,
+    ResetPrefix,
 ]
 
 def register():
