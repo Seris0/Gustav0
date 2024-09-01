@@ -15,7 +15,7 @@ data_weighted = {
         "Swords": {
             "4 Star": {
                 "AmenomaKageuchi": {
-                    "draw_vb": "f35127aa",
+                    "draw_vb": "7ab4088d",
                     "position_vb": "5e0231af",
                     "blend_vb": "c40b8ac0",
                     "texcoord_vb": "528f299f",
@@ -29,7 +29,7 @@ data_weighted = {
                     "ib": "0cc8180c"
                 },
                 "PrototypeRancour": {
-                    "draw_vb": "bffaf2c7",
+                    "draw_vb": "361fdde0",
                     "position_vb": "18802bf2",
                     "blend_vb": "dd3d91ea",
                     "texcoord_vb": "cbccbec2",
@@ -641,7 +641,7 @@ def convert_and_merge(weapon_name, folder_name):
 
 def main():
     parser = argparse.ArgumentParser(description="Weapon file generator")
-    parser.add_argument("--weighted", action="store_true", help="Use weighted conversion logic")
+    parser.add_argument("--weighted", "-w", action="store_true", help="Use weighted conversion logic")
     args = parser.parse_args()
 
    

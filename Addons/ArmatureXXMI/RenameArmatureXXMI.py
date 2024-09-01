@@ -448,7 +448,7 @@ class SetupCharacterForArmatureOperator(Operator):
                             print(f"Error joining objects: {e}")
                         except Exception as e:
                             print(f"Unexpected error joining objects: {e}")
-                elif mode in {'WUWA', 'ZENLESS'}:
+                elif mode in {'WUWA', 'ZENLESS', 'HONKAI'}:
                     pass
                 else:
                     body_meshes = [obj for obj in base_objs if 'body' in obj.name.lower()]
@@ -472,13 +472,22 @@ class SetupCharacterForArmatureOperator(Operator):
                                 print(f"Unexpected error joining body meshes: {e}")
                     base_objs = other_meshes
         
-            if armature_mode == 'PER_COMPONENT' and mode != 'HONKAI':
+            if armature_mode == 'PER_COMPONENT':
                 for obj in base_objs:
                     if obj and obj.name in bpy.data.objects:
                         base_obj_name = obj.name.split('-')[0]
                         for vg in obj.vertex_groups:
                             if not vg.name.startswith(f"{base_obj_name}_"):
                                 vg.name = f"{base_obj_name}_{vg.name}"
+
+            elif mode == 'HONKAI':
+                for obj in base_objs:
+                    if obj and obj.name in bpy.data.objects:
+                        base_obj_name = obj.name.split('-')[0]
+                        if 'body' not in obj.name.lower():
+                            for vg in obj.vertex_groups:
+                                if not vg.name.startswith(f"{base_obj_name}_"):
+                                    vg.name = f"{base_obj_name}_{vg.name}"
 
             elif mode not in {'GENSHIN', 'WUWA', 'ZENLESS'}:
                 for obj in base_objs:
