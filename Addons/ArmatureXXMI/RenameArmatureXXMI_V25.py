@@ -14,7 +14,7 @@ import time
 bl_info = {
     "name": "ArmatureXXMI",
     "author": "Gustav",
-    "version": (2, 2),
+    "version": (2, 5),
     "blender": (3, 6, 2),
     "description": "Matches Armature based on weight paint centroids and surface area.",
     "category": "Object",
@@ -431,47 +431,6 @@ class SetupCharacterForArmatureOperator(Operator):
             except Exception as e:
                 print(f"Failed to add armature to meshes: {e}")
 
-            join_performed = False
-
-            if armature_mode == 'MERGED':
-                if mode == 'GENSHIN':
-                    bpy.ops.object.select_all(action='DESELECT')
-                    for obj in base_objs:
-                        if obj and obj.name in bpy.data.objects:
-                            obj.select_set(True)
-                    if base_objs:
-                        try:
-                            bpy.context.view_layer.objects.active = base_objs[0]
-                            bpy.ops.object.join()
-                            join_performed = True
-                        except ReferenceError as e:
-                            print(f"Error joining objects: {e}")
-                        except Exception as e:
-                            print(f"Unexpected error joining objects: {e}")
-                elif mode in {'WUWA', 'ZENLESS', 'HONKAI'}:
-                    pass
-                else:
-                    body_meshes = [obj for obj in base_objs if 'body' in obj.name.lower()]
-                    other_meshes = [obj for obj in base_objs if 'body' not in obj.name.lower()]
-
-                    if body_meshes:
-                        bpy.ops.object.select_all(action='DESELECT')
-                        for obj in body_meshes:
-                            if obj and obj.name in bpy.data.objects:
-                                obj.select_set(True)
-                        if body_meshes:
-                            try:
-                                bpy.context.view_layer.objects.active = body_meshes[0]
-                                bpy.ops.object.join()
-                                joined_body_mesh = bpy.context.view_layer.objects.active
-                                other_meshes.append(joined_body_mesh)
-                                join_performed = True
-                            except ReferenceError as e:
-                                print(f"Error joining body meshes: {e}")
-                            except Exception as e:
-                                print(f"Unexpected error joining body meshes: {e}")
-                    base_objs = other_meshes
-        
             if armature_mode == 'PER_COMPONENT':
                 for obj in base_objs:
                     if obj and obj.name in bpy.data.objects:
@@ -497,20 +456,6 @@ class SetupCharacterForArmatureOperator(Operator):
                             for vg in obj.vertex_groups:
                                 if not vg.name.startswith(f"{base_obj_name}_"):
                                     vg.name = f"{base_obj_name}_{vg.name}"
-
-            if not join_performed and mode not in {'WUWA', 'ZENLESS', 'HONKAI'}: 
-                bpy.ops.object.select_all(action='DESELECT')
-                for obj in base_objs:
-                    if obj and obj.name in bpy.data.objects:
-                        obj.select_set(True)
-                if base_objs:
-                    try:
-                        bpy.context.view_layer.objects.active = base_objs[0]
-                        bpy.ops.object.join()
-                    except ReferenceError as e:
-                        print(f"Error joining objects: {e}")
-                    except Exception as e:
-                        print(f"Unexpected error joining objects: {e}")
 
             self.report({'INFO'}, "Character set up for armature.")
         else:
