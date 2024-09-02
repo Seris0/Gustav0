@@ -50,7 +50,7 @@ Import3DMigotoFrameAnalysis = find_and_import_xxmi_tools()
 bl_info = {
     "name": "XXMI Scripts & Quick Import",
     "author": "Gustav0, LeoTorreZ",
-    "version": (2, 2),
+    "version": (2, 3),
     "blender": (3, 6, 2),
     "description": "Script Compilation",
     "category": "Object",
@@ -67,6 +67,16 @@ class GIMI_TOOLS_PT_main_panel(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
+
+        # Version display
+        box = layout.box()
+        row = box.row()
+        split = row.split(factor=0.7)
+        col = split.column()
+        col.label(text="XXMI Scripts", icon='SCRIPT')
+        col = split.column()
+        col.alignment = 'RIGHT'
+        col.label(text=f"v{bl_info['version'][0]}.{bl_info['version'][1]}")
 
         # Main Tools Section
         box = layout.box()
@@ -99,7 +109,9 @@ class GIMI_TOOLS_PT_main_panel(bpy.types.Panel):
         if context.scene.show_remap:
             col = box.column(align=True)
             col.prop_search(context.scene, "vgm_source_object", bpy.data, "objects", text="Source")
+            col.separator()
             col.prop_search(context.scene, "vgm_destination_object", bpy.data, "objects", text="Target")
+            col.separator()
             col.operator("object.vertex_group_remap", text="Run Remap", icon='FILE_REFRESH')
 
         # Transfer Properties Section

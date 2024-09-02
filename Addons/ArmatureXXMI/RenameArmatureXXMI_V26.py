@@ -14,7 +14,7 @@ import time
 bl_info = {
     "name": "ArmatureXXMI",
     "author": "Gustav",
-    "version": (2, 5),
+    "version": (2, 6),
     "blender": (3, 6, 2),
     "description": "Matches Armature based on weight paint centroids and surface area.",
     "category": "Object",
@@ -151,19 +151,18 @@ def process_target_collection(collection, mode):
 
     target_objs = [obj for obj in collection.objects if obj.type == 'MESH']
 
+    objects_to_remove = []
     for obj in target_objs:
         name_lower = obj.name.lower()
-        if 'hairshadow' in name_lower:
-            collection.objects.unlink(obj)
-            bpy.data.objects.remove(obj, do_unlink=True)
-        elif 'weapon' in name_lower and 'body' in name_lower:
-            continue
-        elif 'weapon' in name_lower or 'face' in name_lower:
-            collection.objects.unlink(obj)
-            bpy.data.objects.remove(obj, do_unlink=True)
+        if any(keyword in name_lower for keyword in ['hairshadow', 'weapon', 'face', 'eye', 'effect']):
+            if not ('weapon' in name_lower and 'body' in name_lower):
+                objects_to_remove.append(obj)
+
+    for obj in objects_to_remove:
+        collection.objects.unlink(obj)
+        bpy.data.objects.remove(obj, do_unlink=True)
 
     bpy.context.view_layer.update()
-
     bpy.ops.object.select_all(action='DESELECT')
 
     target_objs = [obj for obj in collection.objects if obj.type == 'MESH']
@@ -353,40 +352,6 @@ class MirrorArmatureOperator(Operator):
 
 
 #MARK: Armature > Character
-class SetupArmatureForCharacterOperator(Operator):
-    """Setup Armature for Character"""
-    bl_idname = "object.setup_armature_for_character"
-    bl_label = "Setup Armature for Character"
-    bl_options = {'REGISTER', 'UNDO'}
-
-    def execute(self, context):
-        props = context.scene.armature_matching_props
-        armature_obj = props.armature
-        mode = props.mode
-
-        if not armature_obj or armature_obj.type != 'ARMATURE':
-            self.report({'ERROR'}, "A valid armature must be selected.")
-            return {'CANCELLED'}
-
-        bpy.context.view_layer.objects.active = armature_obj
-        bpy.ops.object.mode_set(mode='EDIT')
-        
-        if mode == 'GENSHIN':
-            for bone in armature_obj.data.edit_bones:
-
-                number_part = ''.join(filter(str.isdigit, bone.name))
-                bone.name = number_part
-        else:
-
-            for bone in armature_obj.data.edit_bones:
-                if "body" in bone.name.lower():
-                    number_part = ''.join(filter(str.isdigit, bone.name))
-                    bone.name = number_part
-
-        bpy.ops.object.mode_set(mode='OBJECT')
-        self.report({'INFO'}, "Setup Armature for Character executed.")
-        return {'FINISHED'}
-
 class SetupCharacterForArmatureOperator(Operator):
     """Set up character for armature"""
     bl_idname = "object.setup_character_for_armature"
@@ -691,34 +656,8 @@ class ResetVertexGroupsNamesOperator(Operator):
 
         self.report({'INFO'}, "Vertex groups names reset successfully.")
         return {'FINISHED'}
-
-class ResetPrefix(Operator):
-    """Reset Vertex Groups Names by removing mesh name prefix"""
-    bl_idname = "object.reset_prefix"
-    bl_label = "Reset Vertex Groups Prefix"
-    bl_options = {'REGISTER', 'UNDO'}
-
-    def execute(self, context):
-        props = context.scene.armature_matching_props
-        base_collection = props.base_collection
-
-        if not base_collection:
-            self.report({'ERROR'}, "Base collection not found.")
-            return {'CANCELLED'}
-
-        base_objs = [obj for obj in base_collection.objects if obj.type == 'MESH']
-
-        for obj in base_objs:
-            mesh_name = obj.name.split('-')[0]  
-            for vg in obj.vertex_groups:
-                if vg.name.startswith(mesh_name):
-                    new_name = vg.name[len(mesh_name):].lstrip('_')
-                    vg.name = new_name
-
-        self.report({'INFO'}, "Vertex groups prefixes reset successfully.")
-        return {'FINISHED'}
     
-#MARK: PANEL   
+#MARK: PANEL  
 class ArmatureXXMIPanel(Panel):
     bl_label = "ArmatureXXMI"
     bl_idname = "OBJECT_PT_armature_xxmi"
@@ -726,13 +665,18 @@ class ArmatureXXMIPanel(Panel):
     bl_region_type = 'UI'
     bl_category = 'XXMI Scripts'
     bl_options = {'DEFAULT_CLOSED'} 
-
     def draw(self, context):
         layout = self.layout
         props = context.scene.armature_matching_props
 
         box = layout.box()
-        box.label(text="Armature Matching", icon='FILE_REFRESH')
+        row = box.row()
+        split = row.split(factor=0.7)
+        col = split.column()
+        col.label(text="Armature Matching", icon='FILE_REFRESH')
+        col = split.column()
+        col.alignment = 'RIGHT'
+        col.label(text=f"v{bl_info['version'][0]}.{bl_info['version'][1]}")
 
         box.prop(props, "armature_mode")
         box.prop(props, "mode")  
@@ -750,28 +694,29 @@ class ArmatureXXMIPanel(Panel):
         row.scale_y = 1.2
         row.operator("object.armature_matching", icon='CON_ARMATURE')
 
-        layout.separator(factor=0.5)
+        layout.separator(factor=0.2)
+  
+        box = layout.box()
+        box.label(text="Operations", icon='PREFERENCES')
+        col = box.column(align=True)
 
-        layout.operator("object.mirror_armature", icon='MOD_MIRROR')
-        layout.operator("object.clean_armature", icon='BRUSH_DATA')
-        layout.operator("object.setup_armature_for_character", icon='OUTLINER_OB_ARMATURE')
-        layout.operator("object.setup_character_for_armature", icon='OUTLINER_OB_MESH')
-        layout.operator("object.split_mesh_by_vertex_groups", icon='GROUP_VERTEX')
-        layout.operator("object.reset_vertex_groups_names", icon='OUTLINER_OB_GREASEPENCIL')
-        layout.operator("object.reset_prefix", icon='X')
-
+        col.scale_y = 1.1
+        
+        col.operator("object.mirror_armature", icon='MOD_MIRROR')
+        col.operator("object.clean_armature", icon='BRUSH_DATA')
+        col.operator("object.setup_character_for_armature", icon='ARMATURE_DATA')
+        col.operator("object.split_mesh_by_vertex_groups", icon='MESH_DATA')
+        col.operator("object.reset_vertex_groups_names", icon='GROUP_VERTEX')
 
 classes = [
     ArmatureMatchingProperties,
     ArmatureMatchingOperator,
-    SetupArmatureForCharacterOperator,
     SetupCharacterForArmatureOperator,
     CleanArmatureOperator,
     MirrorArmatureOperator,
     SplitMeshByVertexGroupsOperator,
     ArmatureXXMIPanel,
     ResetVertexGroupsNamesOperator,
-    ResetPrefix,
 ]
 
 def register():
