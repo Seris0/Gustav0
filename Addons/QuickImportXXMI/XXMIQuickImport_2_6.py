@@ -50,7 +50,7 @@ Import3DMigotoFrameAnalysis, Import3DMigotoRaw = find_and_import_xxmi_tools()
 bl_info = {
     "name": "XXMI Scripts & Quick Import",
     "author": "Gustav0, LeoTorreZ",
-    "version": (2, 5),
+    "version": (2, 6),
     "blender": (3, 6, 2),
     "description": "Script Compilation",
     "category": "Object",
@@ -156,11 +156,11 @@ class OBJECT_OT_transfer_properties(bpy.types.Operator):
 
             base_prefix_dict = {}
             for base_obj in base_collection.objects:
-                prefix = base_obj.name.split("-")[0]
+                prefix = base_obj.name.rsplit("-", 1)[0]
                 base_prefix_dict[prefix] = base_obj
 
             for target_obj in target_collection.objects:
-                target_prefix = target_obj.name.split("-")[0]
+                target_prefix = target_obj.name.rsplit("-", 1)[0]
                 if target_prefix in base_prefix_dict:
                     base_obj = base_prefix_dict[target_prefix]
 
@@ -240,7 +240,7 @@ class OBJECT_OT_merge_vertex_groups(bpy.types.Operator):
         elif mode == 'MODE2':
             vgroup_names = [str(i) for i in range(smallest_group_number, largest_group_number + 1)]
         elif mode == 'MODE3':
-            vgroup_names = list(set(x.name.split(".")[0] for y in selected_obj for x in y.vertex_groups))
+            vgroup_names = list(set(x.name.rsplit('.',1)[0] for y in selected_obj for x in y.vertex_groups))
         else:
             self.report({'ERROR'}, "Mode not recognized, exiting")
             return {'CANCELLED'}
@@ -251,7 +251,7 @@ class OBJECT_OT_merge_vertex_groups(bpy.types.Operator):
 
         for cur_obj in selected_obj:
             for vname in vgroup_names:
-                relevant = [x.name for x in cur_obj.vertex_groups if x.name.split(".")[0] == vname]
+                relevant = [x.name for x in cur_obj.vertex_groups if x.name.rsplit('.',1)[0] == vname]
 
                 if relevant:
                     vgroup = cur_obj.vertex_groups.new(name=f"x{vname}")
@@ -309,8 +309,8 @@ class GIMI_TOOLS_OT_fill_vgs(bpy.types.Operator):
 
             for vg in ob.vertex_groups:
                 try:
-                    if int(vg.name.split(".")[0]) > largest:
-                        largest = int(vg.name.split(".")[0])
+                    if int(vg.name.rsplit(".",1)[0]) > largest:
+                        largest = int(vg.name.rsplit(".",1)[0])
                 except ValueError:
                     print(f"Vertex group '{vg.name}' not named as integer, skipping")
 
@@ -648,22 +648,23 @@ class GIMI_TOOLS_PT_quick_import_panel(bpy.types.Panel):
 
 class QuickImportBase:
     def post_import_processing(self, context, folder):
-        if context.scene.quick_import_settings.create_collection:
+        xxmi = context.scene.quick_import_settings
+        if xxmi.create_collection:
             self.create_collection(context, folder)
 
-        if context.scene.quick_import_settings.create_mesh_collection:
+        if xxmi.create_mesh_collection:
             self.create_mesh_collection(context, folder)
 
-        if context.scene.quick_import_settings.reset_rotation:
+        if xxmi.reset_rotation:
             self.reset_rotation(context)
 
-        if context.scene.quick_import_settings.tri_to_quads:
+        if xxmi.tri_to_quads:
             self.convert_to_quads()
 
-        if context.scene.quick_import_settings.merge_by_distance:
+        if xxmi.merge_by_distance:
             self.merge_by_distance()
 
-        if context.scene.quick_import_settings.import_textures:
+        if xxmi.import_textures:
             self.setup_textures(context)
 
     def create_collection(self, context, folder):
@@ -694,8 +695,8 @@ class QuickImportBase:
 
                 try:
                     #duplicate data to new containers in collections
-                    name = obj.name.split(collection_name)[1].split("-")[0]
-                    new_sub_collection = bpy.data.collections.new(obj.name.split("-")[0])
+                    name = obj.name.split(collection_name)[1].rsplit("-", 1)[0]
+                    new_sub_collection = bpy.data.collections.new(obj.name.rsplit("-", 1)[0])
                     bpy.context.scene.collection.children.link(new_sub_collection)
                     ob = bpy.data.objects.new(name = name, object_data = obj.data.copy())
                     ob.location = obj.location
@@ -711,7 +712,7 @@ class QuickImportBase:
                     obj.data.update()
                     bm.free()
                     print(f"Moved {obj.name} to collection {name} as {ob.name}.")
-                    obj.name = obj.name.split("-")[0] + "-KeepEmpty"
+                    obj.name = obj.name.rsplit("-", 1)[0] + "-KeepEmpty"
                     print(f"{obj.name} maintains custom properties, don't delete.")
 
                 except IndexError:
