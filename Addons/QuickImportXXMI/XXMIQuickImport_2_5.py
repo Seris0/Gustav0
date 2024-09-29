@@ -37,20 +37,20 @@ def find_and_import_xxmi_tools():
 
     try:
         module = importlib.import_module(module_name)
-        return getattr(module, 'Import3DMigotoFrameAnalysis')
+        return getattr(module, 'Import3DMigotoFrameAnalysis'), getattr(module, 'Import3DMigotoRaw')
     except ImportError as e:
         print(f"Error importing module: {e}")
     except AttributeError as e:
-        print(f"Error finding 'Import3DMigotoFrameAnalysis': {e}")
+        print(f"Error finding 'Import3DMigotoFrameAnalysis' or 'Import3DMigotoRaw': {e}")
     
-    return None
+    return None, None
 
-Import3DMigotoFrameAnalysis = find_and_import_xxmi_tools()
+Import3DMigotoFrameAnalysis, Import3DMigotoRaw = find_and_import_xxmi_tools()
 
 bl_info = {
     "name": "XXMI Scripts & Quick Import",
     "author": "Gustav0, LeoTorreZ",
-    "version": (2, 3),
+    "version": (2, 4),
     "blender": (3, 6, 2),
     "description": "Script Compilation",
     "category": "Object",
@@ -59,7 +59,7 @@ bl_info = {
 
 
 class GIMI_TOOLS_PT_main_panel(bpy.types.Panel):
-    bl_label = "XXMI Tools"
+    bl_label = "ToolsXXMI"
     bl_idname = "GIMI_TOOLS_PT_MainPanel"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
@@ -294,26 +294,34 @@ class GIMI_TOOLS_OT_remove_all_vgs(bpy.types.Operator):
 class GIMI_TOOLS_OT_fill_vgs(bpy.types.Operator):
     bl_label = "Fill Vertex Groups"
     bl_idname = "gimi_tools.fill_vgs"
-    bl_description = "Fill the VG's based on Largest input and sort the VG's"
+    bl_description = "Fill the VG's based on Largest input and sort the VG's for all selected mesh objects"
 
     def execute(self, context):
-        selected_object = bpy.context.active_object
-        largest = context.scene.Largest_VG  
-        ob = bpy.context.active_object
-        ob.update_from_editmode()
+        largest = context.scene.Largest_VG
+        selected_objects = [obj for obj in bpy.context.selected_objects if obj.type == 'MESH']
 
-        for vg in ob.vertex_groups:
-            try:
-                if int(vg.name.split(".")[0]) > largest:
-                    largest = int(vg.name.split(".")[0])
-            except ValueError:
-                print("Vertex group not named as integer, skipping")
+        if not selected_objects:
+            self.report({'ERROR'}, "No mesh objects selected")
+            return {'CANCELLED'}
 
-        missing = set([f"{i}" for i in range(largest + 1)]) - set([x.name.split(".")[0] for x in ob.vertex_groups])
-        for number in missing:
-            ob.vertex_groups.new(name=f"{number}")
+        for ob in selected_objects:
+            ob.update_from_editmode()
 
-        bpy.ops.object.vertex_group_sort()
+            for vg in ob.vertex_groups:
+                try:
+                    if int(vg.name.split(".")[0]) > largest:
+                        largest = int(vg.name.split(".")[0])
+                except ValueError:
+                    print(f"Vertex group '{vg.name}' not named as integer, skipping")
+
+            missing = set([f"{i}" for i in range(largest + 1)]) - set([x.name.split(".")[0] for x in ob.vertex_groups])
+            for number in missing:
+                ob.vertex_groups.new(name=f"{number}")
+
+            bpy.context.view_layer.objects.active = ob
+            bpy.ops.object.vertex_group_sort()
+
+        self.report({'INFO'}, f"Filled and sorted vertex groups for {len(selected_objects)} objects")
         return {'FINISHED'}
 
 class GIMI_TOOLS_OT_remove_unused_vgs(bpy.types.Operator):
@@ -474,12 +482,36 @@ class QuickImportSettings(bpy.types.PropertyGroup):
         name="Import Textures",
         default=True,
         description="Apply Materials and Textures"
-    ) #type: ignore 
+    ) #type: ignore
+    
+    def update_collection_settings(self, context):
+        if self.create_mesh_collection:
+            self.create_collection = False
+        elif self.create_collection:
+            self.create_mesh_collection = False
+        
+    def update_create_collection(self, context):
+        if self.create_collection:
+            self.create_mesh_collection = False
+        self.update_collection_settings(context)
+
+    def update_create_mesh_collection(self, context):
+        if self.create_mesh_collection:
+            self.create_collection = False
+        self.update_collection_settings(context)
+
     create_collection: BoolProperty(
         name="Create Collection",
         default=True,
-        description="Create a new collection based on the folder name"
-    ) #type: ignore e: ignore 
+        description="Create a new collection based on the folder name",
+        update=update_create_collection
+    ) #type: ignore
+    create_mesh_collection: BoolProperty(
+        name="Create Mesh Collection",
+        default=False,
+        description="Create a new collection for mesh data and custom properties",
+        update=update_create_mesh_collection
+    ) #type: ignore
 
 
 class TextureHandler:
@@ -534,7 +566,9 @@ class TextureHandler:
         texImage = material.node_tree.nodes.new("ShaderNodeTexImage")
         texture_name = texture_name[:-4]
         texImage.image = bpy.data.images.get(texture_name)
-        texImage.image.alpha_mode = "NONE"
+        if texImage.image:
+            texImage.image.alpha_mode = "NONE"
+            texImage.image.colorspace_settings.name = 'sRGB'
         material.node_tree.links.new(texImage.outputs[0], bsdf.inputs[0])
         return material.name
 
@@ -569,15 +603,17 @@ class TextureHandler42:
         try:
             image = bpy.data.images.load(texture_path)
             texImage.image = image
-            texImage.image.alpha_mode = "NONE"
-            material.node_tree.links.new(texImage.outputs[0], bsdf.inputs[0])
+            if image:
+                texImage.image.alpha_mode = "NONE"
+                texImage.image.colorspace_settings.name = 'sRGB'
+                material.node_tree.links.new(texImage.outputs[0], bsdf.inputs[0])
         except Exception as e:
             print(f"Error loading image {texture_path}: {e}")
         
         return material.name
         
 class GIMI_TOOLS_PT_quick_import_panel(bpy.types.Panel):
-    bl_label = "Quick Import"
+    bl_label = "QuickImportXXMI"
     bl_idname = "GIMI_TOOLS_PT_QuickImportPanel"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
@@ -589,7 +625,13 @@ class GIMI_TOOLS_PT_quick_import_panel(bpy.types.Panel):
 
         box = layout.box()
         col = box.column(align=True)
-        col.operator("import_scene.3dmigoto_frame_analysis", text="Setup Character", icon='IMPORT')
+        
+        row = col.row(align=True)
+        row.scale_y = 1.3
+        row.operator("import_scene.3dmigoto_frame_analysis", text="Setup Character", icon='IMPORT')
+        row = col.row(align=True)
+        row.scale_y = 1.3
+        row.operator("import_scene.3dmigoto_raw", text="Setup Character Raw (ib + vb)", icon='IMPORT')
         
         col.separator()
         col.label(text="Import Options:", icon='SETTINGS')
@@ -602,8 +644,108 @@ class GIMI_TOOLS_PT_quick_import_panel(bpy.types.Panel):
         row.prop(cfg, "tri_to_quads", toggle=True)
         
         col.prop(cfg, "create_collection", toggle=True)
+        col.prop(cfg, "create_mesh_collection", toggle=True)
 
-class QuickImport(Import3DMigotoFrameAnalysis):
+class QuickImportBase:
+    def post_import_processing(self, context, folder):
+        if context.scene.quick_import_settings.create_collection:
+            self.create_collection(context, folder)
+
+        if context.scene.quick_import_settings.create_mesh_collection:
+            self.create_mesh_collection(context, folder)
+
+        if context.scene.quick_import_settings.reset_rotation:
+            self.reset_rotation(context)
+
+        if context.scene.quick_import_settings.tri_to_quads:
+            self.convert_to_quads()
+
+        if context.scene.quick_import_settings.merge_by_distance:
+            self.merge_by_distance()
+
+        if context.scene.quick_import_settings.import_textures:
+            self.setup_textures(context)
+
+    def create_collection(self, context, folder):
+        collection_name = os.path.basename(folder)
+        new_collection = bpy.data.collections.new(collection_name)
+        bpy.context.scene.collection.children.link(new_collection)
+
+        for obj in bpy.context.selected_objects:
+            if obj.users_collection:  
+                for coll in obj.users_collection:
+                    coll.objects.unlink(obj)
+            new_collection.objects.link(obj)
+            print(f"Moved {obj.name} to collection {collection_name}")
+
+    def create_mesh_collection(self, context, folder):
+        import bmesh
+        collection_name = os.path.basename(folder)
+        new_collection = bpy.data.collections.new(collection_name+"_CustomProperties")
+        bpy.context.scene.collection.children.link(new_collection)
+        new_collection.color_tag = "COLOR_08"
+
+        for obj in bpy.context.selected_objects:
+            if obj.name.startswith(collection_name):
+                bpy.ops.object.mode_set(mode='OBJECT')
+                bpy.context.scene.collection.objects.unlink(obj)
+                new_collection.objects.link(obj)
+                new_collection.hide_select = True
+
+                try:
+                    #duplicate data to new containers in collections
+                    name = obj.name.split(collection_name)[1].split("-")[0]
+                    new_sub_collection = bpy.data.collections.new(obj.name.split("-")[0])
+                    bpy.context.scene.collection.children.link(new_sub_collection)
+                    ob = bpy.data.objects.new(name = name, object_data = obj.data.copy())
+                    ob.location = obj.location
+                    ob.rotation_euler = obj.rotation_euler
+                    ob.scale = obj.scale
+                    new_sub_collection.objects.link(ob)
+
+                    #Del verts of imported containers
+                    bm = bmesh.new()
+                    bm.from_mesh(obj.data)
+                    [bm.verts.remove(v) for v in bm.verts]
+                    bm.to_mesh(obj.data)
+                    obj.data.update()
+                    bm.free()
+                    print(f"Moved {obj.name} to collection {name} as {ob.name}.")
+                    obj.name = obj.name.split("-")[0] + "-KeepEmpty"
+                    print(f"{obj.name} maintains custom properties, don't delete.")
+
+                except IndexError:
+                    print(f"Failed on {obj.name} as it does not contain collection name")
+            else:
+                print(f"Ignored {obj.name} as it does not match the collection name")
+
+    def reset_rotation(self, context):
+        bpy.ops.object.select_all(action='SELECT')
+        for obj in context.selected_objects:
+            obj.rotation_euler = (0, 0, 0)
+
+    def convert_to_quads(self):
+        bpy.ops.object.mode_set(mode='EDIT')
+        bpy.ops.mesh.select_all(action='SELECT')
+        bpy.ops.mesh.tris_convert_to_quads(uvs=True, vcols=True, seam=True, sharp=True, materials=True)
+        bpy.ops.mesh.delete_loose()
+
+    def merge_by_distance(self):
+        bpy.ops.object.mode_set(mode='EDIT')
+        bpy.ops.mesh.select_all(action='SELECT')
+        bpy.ops.mesh.remove_doubles(use_sharp_edge_from_normals=True)
+        bpy.ops.mesh.delete_loose()
+
+    def setup_textures(self, context):
+        bpy.ops.object.mode_set(mode='EDIT')
+        bpy.ops.mesh.select_all(action='SELECT')
+        bpy.ops.mesh.delete_loose()
+        bpy.ops.object.mode_set(mode='OBJECT')
+        for area in context.screen.areas:
+            if area.type == 'VIEW_3D':
+                area.spaces.active.shading.type = 'MATERIAL'
+
+class QuickImport(Import3DMigotoFrameAnalysis, QuickImportBase):
     bl_idname = "import_scene.3dmigoto_frame_analysis"
     bl_label = "Quick Import for XXMI"
     bl_options = {"UNDO"}
@@ -625,45 +767,36 @@ class QuickImport(Import3DMigotoFrameAnalysis):
 
         print(f"Imported meshes: {[obj.name for obj in importedmeshes]}")
 
-        if context.scene.quick_import_settings.create_collection:
-            collection_name = os.path.basename(folder)
-            new_collection = bpy.data.collections.new(collection_name)
-            bpy.context.scene.collection.children.link(new_collection)
+        self.post_import_processing(context, folder)
 
+        return {"FINISHED"}
 
-            for obj in bpy.context.selected_objects:
-                if obj.name.startswith(collection_name):
-                    bpy.context.scene.collection.objects.unlink(obj)
-                    new_collection.objects.link(obj)
-                    print(f"Moved {obj.name} to collection {collection_name}")
-                else:
-                    print(f"Ignored {obj.name} as it does not match the collection name")
+class QuickImportRaw(Import3DMigotoRaw, QuickImportBase):
+    bl_idname = "import_scene.3dmigoto_raw"
+    bl_label = "Quick Import Raw for XXMI"
+    bl_options = {"UNDO"}
 
-        if context.scene.quick_import_settings.reset_rotation:
-            bpy.ops.object.select_all(action='SELECT')
-            for obj in context.selected_objects:
-                obj.rotation_euler = (0, 0, 0)
+    def execute(self, context):
+        result = super().execute(context)
+        if result != {"FINISHED"}:
+            return result
+        
+        folder = os.path.dirname(self.properties.filepath)
+        print("------------------------")
 
-        if context.scene.quick_import_settings.tri_to_quads:
-            bpy.ops.object.mode_set(mode='EDIT')          
-            bpy.ops.mesh.select_all(action='SELECT') 
-            bpy.ops.mesh.tris_convert_to_quads(uvs=True, vcols=True, seam=True, sharp=True, materials=True)
-            bpy.ops.mesh.delete_loose()
-            
-        if context.scene.quick_import_settings.merge_by_distance:
-            bpy.ops.object.mode_set(mode='EDIT')          
-            bpy.ops.mesh.select_all(action='SELECT') 
-            bpy.ops.mesh.remove_doubles(use_sharp_edge_from_normals=True)   
-            bpy.ops.mesh.delete_loose()
-            
-        if context.scene.quick_import_settings.import_textures:
-            bpy.ops.object.mode_set(mode='EDIT')          
-            bpy.ops.mesh.select_all(action='SELECT')
-            bpy.ops.mesh.delete_loose()
-            bpy.ops.object.mode_set(mode='OBJECT')
-            for area in context.screen.areas:
-                if area.type == 'VIEW_3D':
-                    area.spaces.active.shading.type = 'MATERIAL'
+        print(f"Found Folder: {folder}")
+        files = os.listdir(folder)
+        files = [f for f in files if f.endswith("Diffuse.dds")]
+        print(f"List of files: {files}")
+
+        if bpy.app.version < (4, 2, 0):
+            importedmeshes = TextureHandler.create_material(context, files, folder)
+        else:
+            importedmeshes = TextureHandler42.create_material(context, files, folder)
+
+        print(f"Imported meshes: {[obj.name for obj in importedmeshes]}")
+
+        self.post_import_processing(context, folder)
 
         return {"FINISHED"}
     
@@ -705,6 +838,7 @@ addon_keymaps = []
         
 def menu_func_import(self, context):
     self.layout.operator(QuickImport.bl_idname, text="Quick Import for XXMI")   
+    self.layout.operator(QuickImportRaw.bl_idname, text="Quick Import Raw for XXMI")
 
 
 classes = [
@@ -717,6 +851,7 @@ classes = [
     OBJECT_OT_vertex_group_remap,
     OBJECT_OT_merge_vertex_groups,
     QuickImport,
+    QuickImportRaw,
     QuickImportSettings,
     OBJECT_OT_separate_by_material_and_rename
 ]
