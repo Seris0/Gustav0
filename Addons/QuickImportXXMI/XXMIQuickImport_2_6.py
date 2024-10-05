@@ -12,7 +12,42 @@ from bpy.types import Object, Operator, Panel, PropertyGroup
 import numpy as np
 import re
 import importlib
- 
+import requests
+
+CURRENT_VERSION = (2, 6)  # Update this to your current version
+GITHUB_RAW_URL = "https://raw.githubusercontent.com/Seris0/Gustav0/main/Addons/QuickImportXXMI/XXMIQuickImport_2_6.py"
+
+def get_latest_version():
+    response = requests.get(GITHUB_RAW_URL)
+    if response.status_code == 200:
+        # Assuming the version is defined in the file as a tuple
+        # You may need to parse the content to extract the version
+        content = response.text
+        # Example: Extract version from the content
+        # This is a placeholder; adjust the regex as needed
+        match = re.search(r'version\s*=\s*\((\d+),\s*(\d+)\)', content)
+        if match:
+            return (int(match.group(1)), int(match.group(2)))
+    return None
+
+def update_addon():
+    latest_version = get_latest_version()
+    if latest_version and latest_version > CURRENT_VERSION:
+        response = requests.get(GITHUB_RAW_URL)
+        if response.status_code == 200:
+            # Save the new file
+            addon_path = os.path.join(bpy.utils.script_path_user(), "addons", "XXMIQuickImport_2_6.py")
+            with open(addon_path, 'w') as f:
+                f.write(response.text)
+            print("Addon updated to version:", latest_version)
+        else:
+            print("Failed to download the latest version.")
+    else:
+        print("No update available.")
+
+# Call the update function
+update_addon()
+
 if bpy.app.version < (4, 2, 0):
     from blender_dds_addon import import_dds
 
