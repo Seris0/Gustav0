@@ -14,10 +14,11 @@ import re
 import importlib
 import requests
 
-CURRENT_VERSION = (2, 6)  # Update this to your current version
+CURRENT_VERSION = (2, 7)  # Update this to your current version
 GITHUB_RAW_URL = "https://raw.githubusercontent.com/Seris0/Gustav0/main/Addons/QuickImportXXMI/XXMIQuickImport_2_6.py"
-
+ #Teste
 def get_latest_version():
+    #Teste
     response = requests.get(GITHUB_RAW_URL)
     if response.status_code == 200:
         # Assuming the version is defined in the file as a tuple
