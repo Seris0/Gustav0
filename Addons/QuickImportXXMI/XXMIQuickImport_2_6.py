@@ -18,15 +18,11 @@ CURRENT_VERSION = (2, 7)  # Update this to your current version
 GITHUB_RAW_URL = "https://raw.githubusercontent.com/Seris0/Gustav0/main/Addons/QuickImportXXMI/XXMIQuickImport_2_6.py"
  #Teste
 def get_latest_version():
-    #Teste
     response = requests.get(GITHUB_RAW_URL)
     if response.status_code == 200:
-        # Assuming the version is defined in the file as a tuple
-        # You may need to parse the content to extract the version
         content = response.text
-        # Example: Extract version from the content
-        # This is a placeholder; adjust the regex as needed
-        match = re.search(r'version\s*=\s*\((\d+),\s*(\d+)\)', content)
+        # Adjust the regex to match the version correctly
+        match = re.search(r'"version":\s*\[(\d+),\s*(\d+)\]', content)  # Updated regex
         if match:
             return (int(match.group(1)), int(match.group(2)))
     return None
@@ -86,7 +82,7 @@ Import3DMigotoFrameAnalysis, Import3DMigotoRaw = find_and_import_xxmi_tools()
 bl_info = {
     "name": "XXMI Scripts & Quick Import",
     "author": "Gustav0, LeoTorreZ",
-    "version": (2, 6),
+    "version": (2, 7),
     "blender": (3, 6, 2),
     "description": "Script Compilation",
     "category": "Object",
