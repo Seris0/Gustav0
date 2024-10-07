@@ -50,7 +50,7 @@ Import3DMigotoFrameAnalysis, Import3DMigotoRaw = find_and_import_xxmi_tools()
 bl_info = {
     "name": "XXMI Scripts & Quick Import",
     "author": "Gustav0, LeoTorreZ",
-    "version": (2, 6),
+    "version": (2, 7),
     "blender": (3, 6, 2),
     "description": "Script Compilation",
     "category": "Object",
@@ -649,11 +649,6 @@ class GIMI_TOOLS_PT_quick_import_panel(bpy.types.Panel):
 class QuickImportBase:
     def post_import_processing(self, context, folder):
         xxmi = context.scene.quick_import_settings
-        if xxmi.create_collection:
-            self.create_collection(context, folder)
-
-        if xxmi.create_mesh_collection:
-            self.create_mesh_collection(context, folder)
 
         if xxmi.reset_rotation:
             self.reset_rotation(context)
@@ -667,6 +662,12 @@ class QuickImportBase:
         if xxmi.import_textures:
             self.setup_textures(context)
 
+        if xxmi.create_collection:
+            self.create_collection(context, folder)
+
+        if xxmi.create_mesh_collection:
+            self.create_mesh_collection(context, folder)
+            
     def create_collection(self, context, folder):
         collection_name = os.path.basename(folder)
         new_collection = bpy.data.collections.new(collection_name)
