@@ -50,7 +50,7 @@ Import3DMigotoFrameAnalysis, Import3DMigotoRaw = find_and_import_xxmi_tools()
 bl_info = {
     "name": "XXMI Scripts & Quick Import",
     "author": "Gustav0, LeoTorreZ",
-    "version": (2, 7),
+    "version": (2, 8),
     "blender": (3, 6, 2),
     "description": "Script Compilation",
     "category": "Object",
@@ -722,9 +722,9 @@ class QuickImportBase:
                 print(f"Ignored {obj.name} as it does not match the collection name")
 
     def reset_rotation(self, context):
-        bpy.ops.object.select_all(action='SELECT')
         for obj in context.selected_objects:
-            obj.rotation_euler = (0, 0, 0)
+            if obj.name in [o.name for o in bpy.context.selected_objects]:
+                obj.rotation_euler = (0, 0, 0)
 
     def convert_to_quads(self):
         bpy.ops.object.mode_set(mode='EDIT')
