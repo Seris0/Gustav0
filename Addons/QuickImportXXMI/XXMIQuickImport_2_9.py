@@ -50,7 +50,7 @@ Import3DMigotoFrameAnalysis, Import3DMigotoRaw = find_and_import_xxmi_tools()
 bl_info = {
     "name": "XXMI Scripts & Quick Import",
     "author": "Gustav0, LeoTorreZ",
-    "version": (2, 8),
+    "version": (2, 9),
     "blender": (3, 6, 2),
     "description": "Script Compilation",
     "category": "Object",
@@ -156,26 +156,23 @@ class OBJECT_OT_transfer_properties(bpy.types.Operator):
 
             base_prefix_dict = {}
             for base_obj in base_collection.objects:
-                prefix = base_obj.name.rsplit("-", 1)[0]
+                prefix = base_obj.name.rsplit("-", 1)[0].rsplit(".", 1)[0]  
                 base_prefix_dict[prefix] = base_obj
 
             for target_obj in target_collection.objects:
-                target_prefix = target_obj.name.rsplit("-", 1)[0]
+                target_prefix = target_obj.name.rsplit("-", 1)[0].rsplit(".", 1)[0]  
                 if target_prefix in base_prefix_dict:
                     base_obj = base_prefix_dict[target_prefix]
-
 
                     for key in list(target_obj.keys()):
                         if key not in '_RNA_UI':  
                             del target_obj[key]
-
 
                     for key in base_obj.keys():
                         target_obj[key] = base_obj[key]
                     target_obj.location = base_obj.location
                     target_obj.rotation_euler = base_obj.rotation_euler
                     target_obj.scale = base_obj.scale  
-
 
                     log_message = (
                         f"Transferred properties from '{base_obj.name}' to '{target_obj.name}':\n"
