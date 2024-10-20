@@ -1,20 +1,20 @@
 
 #Author: Gustav0, LeoTorreZ
-#Special thanks to Silent for providing several scripts and 3dframeanalyse, and LeoTools for QuickImport.
+#Special thanks to Silent for providing several scripts and 3dframeanalyse, and LeoTools for QuickImport .
 
 
 
 
 import os
-import bpy
-from bpy.props import PointerProperty, StringProperty, EnumProperty, BoolProperty
-from bpy.types import Object, Operator, Panel, PropertyGroup
+import bpy  #type: ignore
+from bpy.props import PointerProperty, StringProperty, EnumProperty, BoolProperty #type: ignore
+from bpy.types import Object, Operator, Panel, PropertyGroup #type: ignore
 import numpy as np
 import re
 import importlib
 
 if bpy.app.version < (4, 2, 0):
-    from blender_dds_addon import import_dds
+    from blender_dds_addon import import_dds #type: ignore
 
 def find_and_import_xxmi_tools():
     current_directory = os.path.dirname(os.path.realpath(__file__))
@@ -50,7 +50,7 @@ Import3DMigotoFrameAnalysis, Import3DMigotoRaw = find_and_import_xxmi_tools()
 bl_info = {
     "name": "XXMI Scripts & Quick Import",
     "author": "Gustav0, LeoTorreZ",
-    "version": (2, 9),
+    "version": (2, 9, 1),
     "blender": (3, 6, 2),
     "description": "Script Compilation",
     "category": "Object",
@@ -64,19 +64,16 @@ class GIMI_TOOLS_PT_main_panel(bpy.types.Panel):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_category = 'XXMI Scripts'
-
+    
     def draw(self, context):
         layout = self.layout
 
-        # Version display
+        # GitHub link button and version info
         box = layout.box()
-        row = box.row()
-        split = row.split(factor=0.7)
-        col = split.column()
-        col.label(text="XXMI Scripts", icon='SCRIPT')
-        col = split.column()
-        col.alignment = 'RIGHT'
-        col.label(text=f"v{bl_info['version'][0]}.{bl_info['version'][1]}")
+        github_row = box.row(align=True)
+        github_row.label(text=f"XXMI Scripts | Current Version: v{'.'.join(map(str, bl_info['version']))}", icon='INFO')
+        github_row.alignment = 'EXPAND'
+        github_row.operator("wm.url_open", text="", icon='URL', emboss=False).url = "https://github.com/Seris0/Gustav0/tree/main/Addons/QuickImportXXMI"
 
         # Main Tools Section
         box = layout.box()
@@ -664,6 +661,8 @@ class QuickImportBase:
 
         if xxmi.create_mesh_collection:
             self.create_mesh_collection(context, folder)
+        
+        bpy.ops.object.select_all(action='DESELECT')
             
     def create_collection(self, context, folder):
         collection_name = os.path.basename(folder)
@@ -678,7 +677,7 @@ class QuickImportBase:
             print(f"Moved {obj.name} to collection {collection_name}")
 
     def create_mesh_collection(self, context, folder):
-        import bmesh
+        import bmesh #type: ignore
         collection_name = os.path.basename(folder)
         new_collection = bpy.data.collections.new(collection_name+"_CustomProperties")
         bpy.context.scene.collection.children.link(new_collection)
