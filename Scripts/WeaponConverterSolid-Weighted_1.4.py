@@ -1,14 +1,17 @@
 
 #Author Gustav0
 
-#Convert to solid weaositon format weighted weapons, still in testing stage.
+#Convert to solid weapon format weighted weapons, still in testing stage.
+#Version: 1.4
+#Fixed Haran and Toukabou
 
 
 
 import struct
 import os
 import shutil 
-import argparse
+import tkinter as tk
+from tkinter import messagebox
 
 data_weighted = {
     "Weapons": {
@@ -34,6 +37,13 @@ data_weighted = {
                     "blend_vb": "dd3d91ea",
                     "texcoord_vb": "cbccbec2",
                     "ib": "0cc8180c"
+                },
+                "Toukabou": {
+                    "draw_vb": "b45451b0",
+                    "position_vb": "4449dcf9",
+                    "blend_vb": "f2b0ebe0",
+                    "texcoord_vb": "e9e099b7",
+                    "ib": "097866ce"
                 }
             },
             "5 Star": {
@@ -46,7 +56,7 @@ data_weighted = {
                 }
             }
         },
-        "Polearm": {
+        "Polearms": {
             "4 Star": {
                 "BlackcliffPole": {
                     "draw_vb": "0c7e3438",
@@ -66,7 +76,6 @@ data_weighted = {
         }
     }
 }
-
 data = {
   "Weapons": {
     "Swords": {
@@ -519,6 +528,7 @@ def convert_and_split(weapon_name, folder_name):
     print(f"Input stride: {input_stride} bytes")
     print(f"Vertex count: {vertex_count}")
 
+
     for i in range(vertex_count):
         offset = i * input_stride
 
@@ -528,10 +538,29 @@ def convert_and_split(weapon_name, folder_name):
         texcoord0 = struct.unpack_from('<2e', input_data, offset + 16)
         texcoord1 = struct.unpack_from('<2e', input_data, offset + 20)
         tangent = struct.unpack_from('<4b', input_data, offset + 24)
-
-        converted_position = struct.pack('<3f', *position[:3])
-        converted_normal = struct.pack('<3f', *(v / 127 for v in normal[:3]))
-        converted_tangent = struct.pack('<4f', *(v / 127 for v in tangent))
+        if weapon_name == "Toukabou":
+            # Rotate -180° around Z axis
+            x, y, z = position[:3]
+            rotated_x = -x
+            rotated_y = -y
+            converted_position = struct.pack('<3f', rotated_x, rotated_y, z)
+            
+            # Rotate normal to match new position
+            nx, ny, nz = (v / 127 for v in normal[:3])
+            rotated_nx = -nx
+            rotated_ny = -ny
+            rotated_nz = -nz
+            converted_normal = struct.pack('<3f', rotated_nx, rotated_ny, rotated_nz)
+            
+            # Rotate tangent to match new position
+            tx, ty, tz, tw = (v / 255 for v in tangent)
+            rotated_tx = -tx
+            rotated_ty = -ty
+            converted_tangent = struct.pack('<4f', rotated_tx, rotated_ty, tz, tw)
+        else:
+            converted_position = struct.pack('<3f', *position[:3])
+            converted_normal = struct.pack('<3f', *(v / 127 for v in normal[:3]))
+            converted_tangent = struct.pack('<4f', *(v / 255 for v in tangent))
 
         position_data.extend(converted_position)
         position_data.extend(converted_normal)
@@ -545,10 +574,14 @@ def convert_and_split(weapon_name, folder_name):
         texcoord_data.extend(converted_texcoord0)
         texcoord_data.extend(converted_texcoord1)
 
-    # Create blend data with vertex_count + 1 entries
-    for i in range(vertex_count + 1):
-        blend_weights = struct.pack('<4f', 1.0, 0.0, 0.0, 0.0)
+    blend_weights = struct.pack('<4f', 1.0, 0.0, 0.0, 0.0)
+    
+    if weapon_name in ["Toukabou", "HaranGeppaku", "BlackcliffPole", "PrototypeStarglitter"]:
+        blend_indices = struct.pack('<4I', 0, 1, 0, 0)
+    else:
         blend_indices = struct.pack('<4I', 1, 0, 0, 0)
+
+    for _ in range(vertex_count + 1):
         blend_data.extend(blend_weights)
         blend_data.extend(blend_indices)
 
@@ -620,9 +653,9 @@ def convert_and_merge(weapon_name, folder_name):
         converted_texcoord0 = struct.pack('<2e', *texcoord0)
         converted_texcoord1 = struct.pack('<2e', *texcoord1)
         
-        converted_tangent = struct.pack('<4b', 
-            *[int(clamp(v * 127, -127, 127)) for v in tangent[:3]],
-            int(clamp(tangent[3] * 127, -127, 127))
+        converted_tangent = struct.pack('<4B', 
+            *[int(clamp(v * 255, 0, 255)) for v in tangent[:3]],
+            int(clamp(tangent[3] * 255, 0, 255))
         )
         
         converted_data.extend(converted_position)
@@ -640,84 +673,150 @@ def convert_and_merge(weapon_name, folder_name):
     print(f"Output vertex count: {vertex_count}")
 
 def main():
-    parser = argparse.ArgumentParser(description="Weapon file generator")
-    parser.add_argument("--weighted", "-w", action="store_true", help="Use weighted conversion logic")
-    args = parser.parse_args()
+    class WeaponConverterApp:
+        def __init__(self, master):
+            self.master = master
+            master.title("Weapon Converter")
+            master.geometry("400x300")  
 
-   
-    selected_data = data_weighted if args.weighted else data
+          
+            self.frame = tk.Frame(master, padx=20, pady=20)
+            self.frame.pack(fill=tk.BOTH, expand=True)
 
-    print("Please select a weapon type:")
-    available_weapon_types = list(selected_data['Weapons'].keys())
-    for i, weapon_type in enumerate(available_weapon_types, 1):
-        print(f"{i}. {weapon_type}")
+            self.label = tk.Label(self.frame, text="Select Weapon Type:", font=("Times New Roman", 12))
+            self.label.grid(row=0, column=0, sticky="w", pady=(0, 5))
 
-    weapon_type_choice = input(f"Enter your choice (1-{len(available_weapon_types)}): ")
+            self.weapon_type_var = tk.StringVar()
+            
+            weapon_types = list(set(list(data_weighted['Weapons'].keys()) + list(data['Weapons'].keys())))
+            self.weapon_type_menu = tk.OptionMenu(self.frame, self.weapon_type_var, 
+                *weapon_types, command=self.update_rarities)
+            self.weapon_type_menu.grid(row=0, column=1, sticky="ew", pady=(0, 5))
 
-    try:
-        weapon_type = available_weapon_types[int(weapon_type_choice) - 1]
-    except (ValueError, IndexError):
-        print(f"Invalid choice. Please run the script again and enter a number between 1 and {len(available_weapon_types)}.")
-        exit()
+            self.label_rarity = tk.Label(self.frame, text="Select Rarity:", font=("Times New Roman", 12))
+            self.label_rarity.grid(row=1, column=0, sticky="w", pady=(0, 5))
 
-    print("Please select a rarity:")
-    available_rarities = list(selected_data['Weapons'][weapon_type].keys())
-    for i, rarity in enumerate(available_rarities, 1):
-        print(f"{i}. {rarity}")
+            self.rarity_var = tk.StringVar()
+            self.rarity_menu = tk.OptionMenu(self.frame, self.rarity_var, "")
+            self.rarity_menu.grid(row=1, column=1, sticky="ew", pady=(0, 5))
 
-    rarity_choice = input(f"Enter your choice (1-{len(available_rarities)}): ")
+            self.label_weapon = tk.Label(self.frame, text="Select Weapon:", font=("Times New Roman", 12))
+            self.label_weapon.grid(row=2, column=0, sticky="w", pady=(0, 5))
 
-    try:
-        rarity = available_rarities[int(rarity_choice) - 1]
-    except (ValueError, IndexError):
-        print(f"Invalid choice. Please run the script again and enter a number between 1 and {len(available_rarities)}.")
-        exit()
+            self.weapon_var = tk.StringVar()
+            self.weapon_menu = tk.OptionMenu(self.frame, self.weapon_var, "")
+            self.weapon_menu.grid(row=2, column=1, sticky="ew", pady=(0, 5))
 
-    print(f"\nAvailable {rarity} {weapon_type}:")
-    available_weapons = list(selected_data['Weapons'][weapon_type][rarity].keys())
-    for i, weapon_name in enumerate(available_weapons, 1):
-        print(f"  {i}. {weapon_name}")
+            self.weighted_var = tk.BooleanVar()
+            self.weighted_checkbox = tk.Checkbutton(self.frame, text="Use Weighted Conversion", variable=self.weighted_var, command=self.update_weapons_list)
+            self.weighted_checkbox.grid(row=3, column=0, columnspan=2, sticky="w", pady=(10, 5))
+            
+           
+            self.tooltip = tk.Label(self.frame, text="For Solid > Animated(Weighted) weapon convert\ne.g., Mistsplitter to Amenoma", 
+                                    font=("Times New Roman", 9), bg="lightyellow", relief="solid", borderwidth=1)
+            self.tooltip.grid(row=4, column=0, columnspan=2, sticky="w", pady=(0, 5))
+            self.tooltip.grid_remove()  
+            
+            self.weighted_checkbox.bind("<Enter>", self.show_tooltip)
+            self.weighted_checkbox.bind("<Leave>", self.hide_tooltip)
 
-    selected_weapon_index = input(f"Enter the number of the weapon you want to generate files for (1-{len(available_weapons)}): ")
+            self.convert_button = tk.Button(self.frame, text="Convert", command=self.convert, bg="#4CAF50", fg="white", font=("Times New Roman", 12, "bold"))
+            self.convert_button.grid(row=5, column=0, columnspan=2, sticky="ew", pady=(20, 0))
 
-    try:
-        selected_weapon = available_weapons[int(selected_weapon_index) - 1]
-        selected_weapon_data = selected_data['Weapons'][weapon_type][rarity][selected_weapon]
-    except (ValueError, IndexError):
-        print(f"Invalid choice. Please run the script again and enter a number between 1 and {len(available_weapons)}.")
-        exit()
+            
+            self.frame.columnconfigure(1, weight=1) 
 
-    folder_name = create_weapon_folder(selected_weapon)
+    
+            self.master.tk.call('tk', 'scaling', 1.0)
+            self.master.option_add("*Font", "Times New Roman 9")
 
-    ini_content = generate_ini(selected_weapon, selected_weapon_data, folder_name, args.weighted)
-    ini_path = os.path.join(folder_name, f'{selected_weapon}.ini')
-    with open(ini_path, 'w') as f:
-        f.write(ini_content)
-    print(f"INI file for {selected_weapon} ({rarity}) generated successfully in {folder_name}.")
+        def show_tooltip(self, event):
+            self.tooltip.grid()
 
-    if args.weighted:
-        convert_and_split(selected_weapon, folder_name)
-        print(f"Converted and split buf files for {selected_weapon} in {folder_name}.")
-    else:
-        convert_and_merge(selected_weapon, folder_name)
-        print(f"Converted and merged buf files for {selected_weapon} in {folder_name}.")
+        def hide_tooltip(self, event):
+            self.tooltip.grid_remove()
 
-    existing_files = [
-        ('*Head.ib', f'{selected_weapon}Head.ib'),
-        ('*HeadDiffuse.dds', f'{selected_weapon}HeadDiffuse.dds'),
-        ('*HeadLightMap.dds', f'{selected_weapon}HeadLightMap.dds')
-    ]
-    for source_pattern, target_name in existing_files:
-        matching_files = [f for f in os.listdir('.') if f.endswith(source_pattern[1:])]
-        if matching_files:
-            source_file = matching_files[0]
-            target_file = os.path.join(folder_name, target_name)
-            shutil.copy(source_file, target_file)
-            print(f"Copied and renamed {source_file} to {target_file}.")
-        else:
-            print(f"Warning: No file matching {source_pattern} found. Please add {target_name} manually to {folder_name}.")
+        def update_rarities(self, *args):
+            weapon_type = self.weapon_type_var.get()
+            rarities = set()
+            if weapon_type in data_weighted['Weapons']:
+                rarities.update(data_weighted['Weapons'][weapon_type].keys())
+            if weapon_type in data['Weapons']:
+                rarities.update(data['Weapons'][weapon_type].keys())
+            rarities = sorted(list(rarities))
+            self.rarity_var.set(rarities[0] if rarities else "")
+            self.rarity_menu['menu'].delete(0, 'end')
+            for rarity in rarities:
+                self.rarity_menu['menu'].add_command(label=rarity, command=tk._setit(self.rarity_var, rarity, self.update_weapons))
 
-    print(f"All files for {selected_weapon} have been generated, renamed, and organized in the {folder_name} folder.")
+            self.update_weapons()
+
+        def update_weapons(self, *args):
+            self.update_weapons_list()
+
+        def update_weapons_list(self):
+            weapon_type = self.weapon_type_var.get()
+            rarity = self.rarity_var.get()
+            weighted = self.weighted_var.get()
+            
+            weapons = set()
+            if weighted and weapon_type in data_weighted['Weapons'] and rarity in data_weighted['Weapons'][weapon_type]:
+                weapons.update(data_weighted['Weapons'][weapon_type][rarity].keys())
+            if not weighted and weapon_type in data['Weapons'] and rarity in data['Weapons'][weapon_type]:
+                weapons.update(data['Weapons'][weapon_type][rarity].keys())
+            
+            weapons = sorted(list(weapons))
+            
+            self.weapon_var.set(weapons[0] if weapons else "")
+            self.weapon_menu['menu'].delete(0, 'end')
+            for weapon in weapons:
+                self.weapon_menu['menu'].add_command(label=weapon, command=tk._setit(self.weapon_var, weapon))
+
+        def convert(self):
+            weapon_type = self.weapon_type_var.get()
+            rarity = self.rarity_var.get()
+            weapon_name = self.weapon_var.get()
+            weighted = self.weighted_var.get()
+
+            if not weapon_type or not rarity or not weapon_name:
+                messagebox.showerror("Error", "Please select all options.")
+                return
+
+            folder_name = create_weapon_folder(weapon_name)
+            selected_data = data_weighted if weighted else data
+
+            ini_content = generate_ini(weapon_name, selected_data['Weapons'][weapon_type][rarity][weapon_name], folder_name, weighted)
+            ini_path = os.path.join(folder_name, f'{weapon_name}.ini')
+            with open(ini_path, 'w') as f:
+                f.write(ini_content)
+
+            if weighted:
+                convert_and_split(weapon_name, folder_name)
+            else:
+                convert_and_merge(weapon_name, folder_name)
+
+      
+            existing_files = [
+                ('*Head.ib', f'{weapon_name}Head.ib'),
+                ('*HeadDiffuse.dds', f'{weapon_name}HeadDiffuse.dds'),
+                ('*HeadLightMap.dds', f'{weapon_name}HeadLightMap.dds')
+            ]
+            for source_pattern, target_name in existing_files:
+                matching_files = [f for f in os.listdir('.') if f.endswith(source_pattern[1:])]
+                if matching_files:
+                    source_file = matching_files[0]
+                    target_file = os.path.join(folder_name, target_name)
+                    shutil.copy(source_file, target_file)
+                    print(f"Copied and renamed {source_file} to {target_file}.")
+                else:
+                    print(f"Warning: No file matching {source_pattern} found. Please add {target_name} manually to {folder_name}.")
+
+            messagebox.showinfo("Success", f"Files for {weapon_name} have been generated in {folder_name}.")
+            print(f"All files for {weapon_name} have been generated, renamed, and organized in the {folder_name} folder.")
+
+    root = tk.Tk()
+    app = WeaponConverterApp(root)
+    root.mainloop()
 
 if __name__ == "__main__":
     main()

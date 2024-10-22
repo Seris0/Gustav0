@@ -188,6 +188,8 @@ def process_base_collection(collection, mode, ignore_hair, ignore_head, armature
         print("Ignoring head meshes...")
         base_objs = [obj for obj in base_objs if 'head' not in obj.name.lower()]
 
+    renamed_groups = []  # Array to store renamed vertex group names
+
     if mode in ['HONKAI']:
         if armature_mode in ['MERGED', 'PER_COMPONENT']:
             body_meshes = [obj for obj in base_objs if 'body' in obj.name.lower()]
@@ -208,7 +210,9 @@ def process_base_collection(collection, mode, ignore_hair, ignore_head, armature
                 mesh_name = obj.name.split('-')[0]
                 for vg in obj.vertex_groups:
                     if not vg.name.startswith(mesh_name + "_"):
-                        vg.name = f"{mesh_name}_{vg.name}"
+                        new_name = f"{mesh_name}_{vg.name}"
+                        vg.name = new_name
+                        renamed_groups.append(new_name)
                 if not obj.name.startswith(mesh_name + "_"):
                     obj.name = f"{mesh_name}_{obj.name}"
 
@@ -219,17 +223,16 @@ def process_base_collection(collection, mode, ignore_hair, ignore_head, armature
                 obj.select_set(True)
             bpy.context.view_layer.objects.active = base_objs[0]
             bpy.ops.object.join()
-            return bpy.context.view_layer.objects.active
+            return bpy.context.view_layer.objects.active, renamed_groups
         
         elif armature_mode == 'PER_COMPONENT':
             for obj in base_objs:
                 mesh_name = obj.name.split('-')[0]
                 for vg in obj.vertex_groups:
                     if not vg.name.startswith(mesh_name + "_"):
-                        vg.name = f"{mesh_name}_{vg.name}"
-                # Remove the following line to prevent double renaming
-                # if not obj.name.startswith(mesh_name + "_"):
-                #     obj.name = f"{mesh_name}_{obj.name}"
+                        new_name = f"{mesh_name}_{vg.name}"
+                        vg.name = new_name
+                        renamed_groups.append(new_name)
 
     bpy.ops.object.select_all(action='DESELECT')
     for obj in base_objs:
@@ -240,9 +243,10 @@ def process_base_collection(collection, mode, ignore_hair, ignore_head, armature
         bpy.ops.object.join()
         
         joined_obj = bpy.context.view_layer.objects.active
-        return joined_obj
+        return joined_obj, renamed_groups
     else:
-        return None
+        return None, renamed_groups
+
 def calculate_vertex_influence_area(obj):
     vertex_area = np.zeros(len(obj.data.vertices))
     
@@ -315,15 +319,64 @@ def match_vertex_groups(base_obj, target_obj):
             matching_info[target_group_name] = best_match
 
     return matching_info
-def rename_armature_bones(matching_info, armature_obj):
+
+def rename_armature_bones(matching_info, armature_obj, renamed_groups):
     bpy.ops.object.mode_set(mode='OBJECT')
     armature = armature_obj.data
 
+    def process_name(original_name, new_name):
+        # Check for 'L' or 'R' as a separate word or with prefix like '_'
+        original_parts = original_name.replace('_', ' ').split()
+        side = next((part for part in original_parts if part in ['L', 'R']), None)
+        
+        if side:
+            new_parts = new_name.replace('_', ' ').split()
+            side_index = next((i for i, part in enumerate(original_parts) if part == side), None)
+            
+            if side_index is not None and side_index < len(new_parts):
+                new_parts.insert(side_index, side)
+            else:
+                new_parts.append(side)
+            
+            # Reconstruct the name, preserving underscores
+            if '_' in original_name:
+                return '_'.join(new_parts)
+            else:
+                return ' '.join(new_parts)
+        
+        return new_name
+
+    # First, rename the bones in the armature
     for bone in armature.bones:
         if bone.name in matching_info:
             new_name = matching_info[bone.name]
+            new_name = process_name(bone.name, new_name)
             print(f"Renaming bone {bone.name} to {new_name}")
             bone.name = new_name
+
+    # Then, rename the vertex groups in the linked meshes
+    for obj in armature_obj.children:
+        if obj.type == 'MESH':
+            for vg in obj.vertex_groups:
+                if vg.name in matching_info:
+                    new_vg_name = matching_info[vg.name]
+                    new_vg_name = process_name(vg.name, new_vg_name)
+                    print(f"Renaming vertex group {vg.name} to {new_vg_name}")
+                    vg.name = new_vg_name
+                elif vg.name in renamed_groups:
+                    # Use the renamed group name if it exists
+                    new_vg_name = vg.name
+                    print(f"Using renamed vertex group {new_vg_name}")
+                else:
+                    print(f"Keeping original vertex group name {vg.name}")
+
+    # Finally, ensure that the vertex group names match the bone names exactly
+    for obj in armature_obj.children:
+        if obj.type == 'MESH':
+            for vg in obj.vertex_groups:
+                corresponding_bone = armature.bones.get(vg.name)
+                if corresponding_bone:
+                    vg.name = corresponding_bone.name
 
 
 #MARK: Mirror

@@ -1,0 +1,51 @@
+def rename_armature_bones(matching_info, armature_obj):
+    bpy.ops.object.mode_set(mode='OBJECT')
+    armature = armature_obj.data
+
+    def process_name(original_name, new_name):
+        # Check for 'L' or 'R' as a separate word or with prefix like '_'
+        original_parts = original_name.replace('_', ' ').split()
+        side = next((part for part in original_parts if part in ['L', 'R']), None)
+        
+        if side:
+            new_parts = new_name.replace('_', ' ').split()
+            side_index = next((i for i, part in enumerate(original_parts) if part == side), None)
+            
+            if side_index is not None and side_index < len(new_parts):
+                new_parts.insert(side_index, side)
+            else:
+                new_parts.append(side)
+            
+            # Reconstruct the name, preserving underscores
+            if '_' in original_name:
+                return '_'.join(new_parts)
+            else:
+                return ' '.join(new_parts)
+        
+        return new_name
+
+    # First, rename the bones in the armature
+    for bone in armature.bones:
+        if bone.name in matching_info:
+            new_name = matching_info[bone.name]
+            new_name = process_name(bone.name, new_name)
+            print(f"Renaming bone {bone.name} to {new_name}")
+            bone.name = new_name
+
+    # Then, rename the vertex groups in the linked meshes
+    for obj in armature_obj.children:
+        if obj.type == 'MESH':
+            for vg in obj.vertex_groups:
+                if vg.name in matching_info:
+                    new_vg_name = matching_info[vg.name]
+                    new_vg_name = process_name(vg.name, new_vg_name)
+                    print(f"Renaming vertex group {vg.name} to {new_vg_name}")
+                    vg.name = new_vg_name
+
+    # Finally, ensure that the vertex group names match the bone names exactly
+    for obj in armature_obj.children:
+        if obj.type == 'MESH':
+            for vg in obj.vertex_groups:
+                corresponding_bone = armature.bones.get(vg.name)
+                if corresponding_bone:
+                    vg.name = corresponding_bone.name
