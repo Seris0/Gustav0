@@ -14,7 +14,7 @@ import time
 bl_info = {
     "name": "ArmatureXXMI",
     "author": "Gustav",
-    "version": (2, 6),
+    "version": (2, 6, 2),
     "blender": (3, 6, 2),
     "description": "Matches Armature based on weight paint centroids and surface area.",
     "category": "Object",
@@ -40,7 +40,7 @@ class ArmatureMatchingProperties(PropertyGroup):
             ('GENSHIN', "Genshin Impact", "Process for Genshin Impact"),
             ("WUWA", "Wuthering Waves", "Process for Wuthering Waves")
         ],
-        default='HONKAI'
+        default='GENSHIN'
     )#type: ignore
     ignore_hair: BoolProperty(
         name="Ignore Hair",
@@ -458,7 +458,7 @@ class CleanArmatureOperator(bpy.types.Operator):
 
             print(f"Vertex groups: {vertex_group_names}")
 
-            prefixes_to_exclude = ("Shoulder", "Scapula", "Knee", "Elbow", "UpperArm", "Clavicle", "Calf", "Forearm")
+            prefixes_to_exclude = ("Shoulder", "Scapula", "Knee", "Elbow", "UpperArm", "Clavicle", "Calf", "Forearm", "Thigh")
             bones_to_delete = [
                 bone for bone in armature.edit_bones
                 if bone.name not in vertex_group_names and not any(prefix.lower() in bone.name.lower() for prefix in prefixes_to_exclude)
