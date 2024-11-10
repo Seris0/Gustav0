@@ -3,64 +3,15 @@
 
 # Immense thanks to the Genshin Impact Modding Community for their help and support
 
-# Fixes almost everyhing from 3.6 to 5.0 
-
-# ################################################################################
-#                            .........
-#                        :+#%@@@@@@%%@@%#+-.
-#                  .. =%@@@%@*##*##*%#%@@@@@@@+-*:
-#                .**%@@@@@@%*+*%@#*+#%@@@@@@@@@#*##:.
-#               .*%#@@@@@@@@@@%##%@@@@@@@@@@#*+#*#%*#-
-#              :=###@@@@*+*##+###@@*-=++++*#@****####%*+.
-#             .++###@@*#@@@@@@%+#*+@@@@@@@@@#=@+###*#%*#@#:
-#             .++##*@#+=-==+*%@@+#@@@@@@@@%+*%=###+##%:..:*=.
-#             .:+=#*@+-:-=*###+*@@#+++==**=--=%##+###::::+:**
-#            .:.-=++:+@@@@@@%*+*#@%##%@@@@@@@%==*##-.:+=+#::@=
-#            :@@@@@@@@@@@%*#%#%@@@@@@@@%##%@@@@@%##**#+-*+*:##.
-#             -@@@@@@@@%*@@@#@@@@@@@@@@@@@@%*%@@@@@@@*-:*::.*-
-#            .-++#@@@@##@@@#%@@@@@@@@@@@@@@@@%+%@@@%#-#@=.:.-.
-#           .+%@@@@@@**@@@@#@@@@@@@@@@@@@@@@@@@%#@@@@@**@@+..
-#          :#@@@@@@@##@@@@%#@@@@@@@@@@@@@@@@@@@@%*@@@@@#*@@%.
-#         .%@@@@@@@*%@@@@@%%@@@@@@@@@@@@@@@@@@%@@@*@@@@@*#@@#.
-#        :%@@@@@###@@@@@@@%%@@@@@@@%@%@@@@@@@@@@@@%#@@@@@*%@@=
-#       .*@@@@@#*@@@%@@@@@%#@@@@@@@@@%@@@@@@@@@@@@@##@@@@@*%@*.
-#       -%@@@@@@@%##*@@@@@%#@@@@@@@@%*@@@@@@@@@@@@@%+@@@@@%*@#.
-#      .+@@@@@@@@@@%+@@@@@@#@@@%@@@@#-#@@%%@@@@@@@@@**@@@@@#+*:
-#      .#@@@@@@@@@@%=*@@@@@#%@@@@@@@-%=%@@*%@@@@@@@@@=%@@@@@@*:.
-#      :@@@@@@@@@@@*#*#@@@@@*@@@@@%=@@@=#@%*@@%@@@@@@%#%*#%@@@@@-
-#    .-@@@@@%@@@@@#+##+%@@@@##@@@%+****#+#@**@@#%@@@@@##@@%#===-.
-# .-*%@@@@%*%@@@@+%@@@%+#@@@@#%@*+@@@@@@@#+@*%@@%+%@@@@*#@@@@+=++.
-#   =**==*#%@@@#*@@%#+#+%+%@@@*==@@####%%@@**#@@@@%=*%@@@*#@@%++++-.
-#     .*%#@@%#+=%=:----+*#%*%@@*%@@%=-=--:-=**@@@@@+%@%%%%@%%%%:
-#    .+%%%%%%%@*--*+*-==*%*@%*+#%#%:=--++*%=:+@@@@@*%%%@%%%%####.
-#  .:+*##%%*+@+--%@++=#++%=++%#=%@%==**=*+@*==@@@@@*@%+++*++**+++-..
-#  :---****##%+-+@@%++++*@=-=---*@@*+-=*+*@===@@@@%*@@*=*++**-::-::.
-#      ...   *%--+%@#++#@#-#@%*-*@@@=-=-*@#---@@@@*=%@@*++=.
-#            :@#-=%@%%@%+-#@@@@#:+@@@@@@@#:--=%%@#-+=::-:+++:
-#             -%#:---==+#@@%###@@*--+*+=---==+%%*-+=:
-#              :#=-+=.-=+*%%@@@@@%%*=-:-=+===##-:+++=.
-#                :-:.  .:--:..:-:::::=*+-.-*=.     ...
-#                       -%@#*:===:++=@@@#=.:=*:
-#                      :%@#=:-+=----%@@@@#:.=%%.
-#                     :+++===:.::=-===+*%@===@@=
-#                    .:#%-=--::.-=-=+#*+==-+=#@+
-#                    .-#%@%+:::::+%#+##-=:.**-@+
-#                    .@@@@@#:::.+@@@@@====.*#+**.
-#                   ..=%%%*==::==*@@@@*:--:-*+%%:
-#                   .=*+++++=++++++=++-==---+:#@@#=.
-#                   .+******+-=******=::=*%%=.
-#              ...::.:==-=+*+------=***-*@@@@%.::....
-#          .-+*******-.-----:...:----=--+-::::-******+:
-#              ..:-==+*+=-=+*****+===-::=***++==-:..
-# ################################################################################
+# Fixes almost everyhing from 3.6 to 5.0
 
 
 from dataclasses import dataclass
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Union
 import os
 import struct
 import shutil
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import multiprocessing
 from functools import partial
 import argparse
 import time
@@ -76,11 +27,11 @@ class ProcessingConfig:
     fix_41: bool
     fix_43: bool
     fix_44_47: bool
-    fix_50: bool
+    fix_52: bool
     oldvsnew_41: Dict[str, str]
     oldvsnew_43: Dict[str, str]
     old_vs_new: Dict[str, str]
-    old_vs_new_50: Dict[str, Dict[str, Dict[str, str]]] 
+    old_vs_new_52: Dict[str, Dict[str, Dict[str, str]]] 
     reverse: bool
     no_remap: bool
 
@@ -93,29 +44,43 @@ def create_parser():
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument('--force_remap', action='store_true', default=False)
     parser.add_argument('--nolog', action='store_true', default=False)
-    parser.add_argument('--disablefile', '-df', action='store_true', help='Remove "disabled" from the exclusion list.')
+    parser.add_argument('--disablefile', '-df', action='store_true', help='Exclude "disabled" files from processing.')
     parser.add_argument('-41', action='store_true', help='Run only the 4.1 fixes.')
     parser.add_argument('-43', action='store_true', help='Run only the 4.3 fixes.')
     parser.add_argument('-44', action='store_true', help='Run only the 4.4-4.7 fixes.')
     parser.add_argument('--reverse', action='store_true', help='Reverse the fixes (new to old).')
     parser.add_argument('--no_remap', action='store_true', help='Skip remapping when hash trigger is found.')
-    parser.add_argument('-50', action='store_true', help='Run only the 5.0 fixes.')
+    parser.add_argument('-52', action='store_true', help='Run only the 5.0 fixes.')
     return parser
 
 def fullfix_update():
     folder_path = os.getcwd()
+    if "Mods" not in folder_path:
+        print("Error: The current directory must contain a 'Mods' folder.")
+        input("Press Enter to exit...")
+        return 
 
     parser = create_parser()
     args = parser.parse_args()
-    fix_41 = args.__dict__['41']
-    fix_43 = args.__dict__['43']
-    fix_44_47 = args.__dict__['44']
-    fix_50 = args.__dict__['50'] 
-
-    if not (fix_41 or fix_43 or fix_44_47 or fix_50):  
-        fix_41 = fix_43 = fix_44_47 = fix_50 = True  
-
-    config = ProcessingConfig(fix_41, fix_43, fix_44_47, fix_50, oldvsnew_41, oldvsnew_43, old_vs_new, old_vs_new_50, args.reverse, args.no_remap)
+    
+    # Get version fixes from args, defaulting to True if none specified
+    version_fixes = {
+        'fix_41': args.__dict__['41'],
+        'fix_43': args.__dict__['43'], 
+        'fix_44_47': args.__dict__['44'],
+        'fix_52': args.__dict__['52']
+    }
+    
+    if not any(version_fixes.values()):
+        version_fixes = {k: True for k in version_fixes}
+        
+    config = ProcessingConfig(**version_fixes, 
+                            oldvsnew_41=oldvsnew_41,
+                            oldvsnew_43=oldvsnew_43, 
+                            old_vs_new=old_vs_new,
+                            old_vs_new_52=old_vs_new_52,
+                            reverse=args.reverse,
+                            no_remap=args.no_remap)
 
     if args.reverse:
         print("=" * 70)
@@ -136,6 +101,7 @@ def fullfix_update():
 
     start_time = time.time()
 
+
     if args.force_remap:
         processed_files_count = force_remap(folder_path, remaps)
     else:
@@ -143,7 +109,7 @@ def fullfix_update():
 
     end_time = time.time()
     elapsed_time = end_time - start_time
-    print(f"Processing took {elapsed_time:.2f} seconds")
+    print(f"\nProcessing took {elapsed_time:.2f} seconds")
     print(f"Total INI files found: {len(ini_files)}")
     print(f"Processed {processed_files_count} files")
     if not args.force_remap and args.nolog:
@@ -178,13 +144,13 @@ def create_backup(file_path: str, is_ini: bool = False) -> str:
     except Exception as e:
         print(f"Error creating backup for {file_path}: {str(e)}")
         return None
-
-def collect_ini_files(folder_path: str, disablefile: bool) -> List[str]:
+    
+def collect_ini_files(folder_path: str, exclude_disabled: bool = False) -> List[str]:
     print("\nCollecting ini files, please wait...")
     ini_files = []
-    exclude_keywords = {'desktop', 'ntuser', 'disabled_backup', 'disabled'}
-    if disablefile:
-        exclude_keywords.remove('disabled')
+    exclude_keywords = {'desktop', 'ntuser', 'disabled_backup'}  
+    if exclude_disabled:
+        exclude_keywords.add('disabled')  
 
     for root, _, files in os.walk(folder_path):
         if 'BufferValues' in root:
@@ -226,14 +192,14 @@ def process_ini_file(ini_file: str, blend_files: List[str], remaps: Dict[str, Re
             original_data = data
 
         if config.reverse:
-            data, blend_log = apply_remap(data, folder_path, blend_files, remaps, config.reverse, config.no_remap)
-            if config.fix_50:
-                data, log = update_version(data, {v: k for category in config.old_vs_new_50.values() for character in category.values() for k, v in character.items()}, "5.0 (Reverse)", log)            
+            if config.fix_52:
+                data, log = update_version(data, {v: k for category in config.old_vs_new_52.values() for character in category.values() for k, v in character.items()}, "5.2 (Reverse)", log)            
             if config.fix_44_47:
                 data, log = update_version(data, {v: k for k, v in config.old_vs_new.items()}, "4.4 - 4.7 (Reverse)", log)
             if config.fix_43:
                 data, log = update_version(data, {v: k for k, v in config.oldvsnew_43.items()}, "4.3 (Reverse)", log)
             if config.fix_41:
+                data, blend_log = apply_remap(data, folder_path, blend_files, remaps, config.reverse, config.no_remap)
                 data, log = update_version(data, {v: k for k, v in config.oldvsnew_41.items()}, "4.1 (Reverse)", log, alljson_41)
         
         else:
@@ -245,8 +211,8 @@ def process_ini_file(ini_file: str, blend_files: List[str], remaps: Dict[str, Re
                 data, log = update_version(data, config.oldvsnew_43, "4.3", log)
             if config.fix_44_47:
                 data, log = update_version(data, config.old_vs_new, "4.4 - 4.7", log)
-            if config.fix_50:
-                data, log = update_version(data, config.old_vs_new_50, "5.0", log)
+            if config.fix_52:
+                data, log = update_version(data, config.old_vs_new_52, "5.2", log)
 
         log.extend(blend_log)
 
@@ -308,7 +274,7 @@ def apply_remap(data: str, folder_path: str, blend_files: List[str], remaps: Dic
                     blend_log.append(str(e))
     return data, blend_log
 
-def update_version(data: str, oldvsnew: Dict[str, str] | Dict[str, Dict[str, Dict[str, str]]], version: str, log: List[str], json_data: List[Dict] | None = None) -> Tuple[str, List[str]]:
+def update_version(data: str, oldvsnew: Union[Dict[str, str], Dict[str, Dict[str, Dict[str, str]]]], version: str, log: List[str], json_data: Union[List[Dict], None] = None) -> Tuple[str, List[str]]:
     updated = False
     already_updated = False
 
@@ -358,24 +324,17 @@ def update_version(data: str, oldvsnew: Dict[str, str] | Dict[str, Dict[str, Dic
 def process_files(ini_files: List[str], blend_files: List[str], remaps: Dict[str, RemapData], config: ProcessingConfig, nolog: bool) -> Tuple[int, List[ProcessingResult]]:
     results = []
     processed_files_count = 0
-    
-
     process_file = partial(process_ini_file, blend_files=blend_files, remaps=remaps, config=config)
+    with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
+        results = pool.map(process_file, ini_files)
     
-    with ThreadPoolExecutor(max_workers=os.cpu_count()) as executor:
-        future_to_file = {executor.submit(process_file, ini_file): ini_file for ini_file in ini_files}
-        for future in as_completed(future_to_file):
-            result = future.result()
-            results.append(result)
-            if result.updated:
-                processed_files_count += 1
+    processed_files_count = sum(1 for result in results if result.updated)
     
     if not nolog:
         for result in results:
             if result.log:
                 print("=" * 70)
                 print("\n".join(result.log))
-    
     return processed_files_count, results
  
 def force_remap(folder_path: str, remaps: Dict[str, RemapData]) -> None:
@@ -415,6 +374,10 @@ def force_remap(folder_path: str, remaps: Dict[str, RemapData]) -> None:
     if not blend_files:
         print("No blend files found. Aborting!")
         return 0
+    
+    if not blend_files:
+        print("No blend files found. Aborting!")
+        return 0
 
     processed_files_count = 0
     for blend_file in blend_files:
@@ -450,50 +413,50 @@ old_hashes_ib_43 = []
 new_hashes_ib_43 = []
 oldvsnew_43 = {}
 
-old_vs_new_50 = {
-    "Characters": {
-        "GaMing": {
-            "8ddd3ae9": "t3st4x1a"
-        },
-        "Clorinde": {
-            "d8decbca": "1ccb8008",
-            "fd9483ca": "060f5303",
-            "8f067708": "f23483e3",
-            "c79a4ccb": "225aad5a",
-            "77975500": "5f8aac45"
-        },
-        "Emilie": {
-            "be84b775": "e8b5a730"
-        },
-        "Rover (Male)": {
-            "d53c2cc7": "c9db8418",
-            "f8375eb4": "3ab7c4d1",
-            "6e2f48ba": "a4be44e5"
-        },
-        "Yinlin": {
-            "86b95122": "00120eee",
-            "148a83c6": "33d00a20",
-            "750390fa": "584b7755",
-            "9ebf7cad": "5065eae3",
-            "e56f82b1": "e50849e0",
-            "76967821": "9ea4dc96",
-            "1f0f6dc8": "58b06268",
-            "30053482": "87bbb0c1"
-        },
-        "Baizhi": {
-            "37bed36b": "718456ac",
-            "52c9b804": "d7756134"
-        },
-        "Calcharo": {
-            "8b43ad38": "f3e04a65",
-            "cb23f0b5": "52197a16",
-            "f657b0b8": "8a7d6de5"
-        },
-        "Jiyan": {
-            "b05fac63": "9631335c",
-            "1b3a68de": "7741698a"
-        }
-    }
+old_vs_new_52 = {
+    # "Characters": {
+    #     "Xiao": {
+    #         "8ddd3ae9": "t3st4x1a"
+    #     },
+    #     "ChangLi": {
+    #         "d8decbca": "1ccb8008",
+    #         "fd9483ca": "060f5303",
+    #         "8f067708": "f23483e3",
+    #         "c79a4ccb": "225aad5a",
+    #         "77975500": "5f8aac45"
+    #     },
+    #     "Rover (Female)": {
+    #         "be84b775": "e8b5a730"
+    #     },
+    #     "Rover (Male)": {
+    #         "d53c2cc7": "c9db8418",
+    #         "f8375eb4": "3ab7c4d1",
+    #         "6e2f48ba": "a4be44e5"
+    #     },
+    #     "Yinlin": {
+    #         "86b95122": "00120eee",
+    #         "148a83c6": "33d00a20",
+    #         "750390fa": "584b7755",
+    #         "9ebf7cad": "5065eae3",
+    #         "e56f82b1": "e50849e0",
+    #         "76967821": "9ea4dc96",
+    #         "1f0f6dc8": "58b06268",
+    #         "30053482": "87bbb0c1"
+    #     },
+    #     "Baizhi": {
+    #         "37bed36b": "718456ac",
+    #         "52c9b804": "d7756134"
+    #     },
+    #     "Calcharo": {
+    #         "8b43ad38": "f3e04a65",
+    #         "cb23f0b5": "52197a16",
+    #         "f657b0b8": "8a7d6de5"
+    #     },
+    #     "Jiyan": {
+    #         "b05fac63": "9631335c",
+    #         "1b3a68de": "7741698a"
+    #     }
+    # }
 }
 
 alljson_41 = [
@@ -943,7 +906,13 @@ alljson_41 = [
     },
     {
         "old_draw_vb": "7acaf240",
-        "new_draw_vb": "",
+        "new_draw_vb": "f32fdd67",
+        "path": "./PlayerCharacterData/ChildeScarf/hash.json",
+        "position_vb": "f717e00c"
+    },
+    {
+        "old_draw_vb": "796a33a2",
+        "new_draw_vb": "f08f1c85",
         "path": "./PlayerCharacterData/Childe/hash.json",
         "position_vb": "f717e00c"
     },
@@ -2717,7 +2686,7 @@ alljson_43 = [
     {
         "old_ib": "ef095180",
         "new_ib": "d7dd3b5f",
-        "path": "./PlayerCharacterData/Childe/hash.json"
+        "path": "./PlayerCharacterData/ChildeScarf/hash.json"
     },
     {
         "old_ib": "34b9b809",
@@ -4402,4 +4371,5 @@ remaps = {
 
    
 if __name__ == '__main__':
+    multiprocessing.freeze_support()
     fullfix_update()
