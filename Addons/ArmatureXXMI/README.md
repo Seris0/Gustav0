@@ -9,7 +9,7 @@
 
 This script is an add-on for Blender that facilitates the setup of armatures for certain anime games. It offers various functionalities for vertex group matching, armature mirroring, and character preparation.
 
-For a better experience, use it together with [QuickImportXXMI]([https://github.com/Seris0/Gustav0/blob/main/Addons/XXMI_Tool_QuickImport_42.py](https://github.com/Seris0/QuickImportXXMI)).
+For a better experience, use it together with [QuickImportXXMI](https://github.com/Seris0/QuickImportXXMI).
 
 ## Important Note
 
